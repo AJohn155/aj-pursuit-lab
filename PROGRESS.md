@@ -22,7 +22,8 @@ Append-only. Read this and SPEC.md before starting any session.
 **Test status:**
 - `npm run build` passes clean (tsc -b && vite build)
 - All 10 tab routes verified 200 against local dev server; all 10 tab labels confirmed present in built JS bundle
-- No visual browser verification was possible in this environment (no Chrome MCP connection, computer-use access declined) — verification was route/build-level only, not visual
+- Deployed and live: **https://ajohn155.github.io/aj-pursuit-lab/** — verified via curl: root HTML (200), JS/CSS bundle assets (200), all 10 tab labels present in the live bundle, and the `404.html` SPA-fallback redirect confirmed serving on a deep link (`/rides`)
+- No visual browser verification was possible in this environment (no Chrome MCP connection, computer-use access declined) — verification was route/build/asset-level via curl, not visual. Recommend the owner open the live URL on phone and desktop to confirm the P0 gate visually.
 
 **What's next:** P1 Data layer — Dexie schema, DataStore interface, Firebase init/auth/sync, settings page, venue seed + manager, backup export/import.
 
