@@ -3,6 +3,11 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.tsx'
+import { ensureSeeded } from './store/db.ts'
+import { initSync } from './store/sync.ts'
+
+await ensureSeeded()
+initSync()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
