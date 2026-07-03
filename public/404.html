@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>AJ Pursuit Lab</title>
+    <script>
+      // GitHub Pages SPA fallback: encode the current deep link into a query
+      // string and redirect to index.html, which decodes it back (see index.html).
+      // pathSegmentsToKeep = 1 to preserve the /aj-pursuit-lab/ repo path segment.
+      var pathSegmentsToKeep = 1
+      var l = window.location
+      var segs = l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/')
+      l.replace(
+        l.protocol +
+          '//' +
+          l.hostname +
+          (l.port ? ':' + l.port : '') +
+          segs +
+          '/?/' +
+          l.pathname.slice(segs.length + 1).replace(/&/g, '~and~') +
+          (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+          l.hash,
+      )
+    </script>
+  </head>
+  <body></body>
+</html>
