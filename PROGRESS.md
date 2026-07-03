@@ -76,3 +76,40 @@ Owner reported: global params sync correctly phone↔laptop, but venue edits don
 **Note for the owner:** if your earlier venue edit was already overwritten by this race before the fix deployed, you'll need to re-apply it once this is live — the fix prevents the bug going forward but doesn't recover data already lost to it.
 
 **Test status:** `npm test` 17/17 passing (new regression test included); `npm run build` and `npm run lint` both clean.
+
+---
+
+## 2026-07-03 — P2 Engine core
+
+**Model:** Claude (Opus 4.8), via Claude Code CLI
+
+**Completed:** the pure-TypeScript physics engine under `src/engine/` (SPEC §4.1–4.3, §4.9–4.14) plus the four calculator math functions (§5.8). `ENGINE_VERSION = '0.2.0-p2'`. No React/DOM/store/dexie/firebase imports anywhere in `src/engine` (purity rule §2.1 verified by grep).
+
+- `constants.ts` / `params.ts` — g, ENGINE_VERSION; mEff = massKg+rotatingMassEqKg, effectiveCrr (§4.1).
+- `atmosphere.ts` — air density from T/P/RH, owner's convention verbatim (§4.2); fast-mode steady + lap-1 density scales (§4.12).
+- `track.ts` — track position model (§4.3): bendFraction, isBend segment map, leanAngle, kN, kV, cornerFactors, lapCrrMultiplier, and the wheel→COM speed inversion.
+- `cda.ts` — whole-lap energy-balance CdA (§4.9): energyBalanceCda (returns full E_in/ΔKE/E_roll/E_aero breakdown), cdaPerLap, cdaRace with 95 % CI from lap scatter, sane-range predicate.
+- `simulate.ts` — forward simulator (§4.10): semi-implicit Euler at dt=0.1 s over the track model, lap-split interpolation, default standing-start power template.
+- `solve.ts` — bisection inverse solvers for power/CdA/crr/mass/rho vs a target time; Watts-to-Win (power-to-match + ΔCdA alternative) (§4.11).
+- `density.ts` — fast-mode lap-vector normalization + full-mode re-simulation + equivalent-time-at-ref-density (§4.12).
+- `wprime.ts` — Skiba W′ balance with the spec τ, plus CP/W′ estimation from mean-maximal points (§4.13).
+- `pacing.ts` — 3-parameter pacing-family grid search under W′bal ≥ 0, and actual-vs-optimal comparison with per-lap time lost (§4.14).
+- `calculators.ts` — cadence (+grid), power-for-speed flat & full-track modes, watts-saved (+grid), time adjuster (env→ρ→scale) (§5.8).
+
+**Test status:** `npm test` **99/99 passing** (11 files; 82 new engine tests + the 17 pre-existing store tests); `npm run build` and `npm run lint` both clean.
+- **Gate 6 (air density) — full:** `airDensity(24,1006,55) = 1.1722` (within 1e-4 of target).
+- **Gate 7 (calculators) — full:** power-for-speed@63 kph = 684.29 W; watts-saved@60 kph,5 counts = 13.31 W; time-adjuster 15.6 s @ρ1.1722→0.9934 = 14.7627 s (target 14.7626). All within spec tolerance.
+- **Gates 4 & 5 — synthetic** (fixture `.fit` ingest is P3, so these are synthetic-data forms): CdA energy balance recovers the ground-truth CdA to ~1e-8 on constant-COM-speed data and to ~1e-5 on a constant-power interior lap from the forward sim; forward-sim/solver round-trips recover input power and CdA; two synthetic rides land in [0.16,0.26] and within 0.015 m² of each other.
+- **Gates 1–3** (parse, race detection, lap construction) depend on §4.4–4.8 and are deferred to P3 with the real fixtures.
+
+**What's next:** P3 Ingest — §4.4–4.8 (FIT parse → 1 Hz timeline, race detection, standing-start reconstruction, lap construction/calibration, venue geometry fitting) + detection-confirm UI, run against the two real fixtures for gates 1–5, and add `data/fixtures/expected.json`.
+
+**Deviations / documented judgment calls (SPEC §9):**
+- **Scope:** §4.4–4.8 intentionally NOT built here — they're the P3 phase and gates 1–3 depend on them. Gates 4/5 done in synthetic form; 6/7 in full. This matches P2's charter in §8.
+- **Wheel→COM inversion (§4.3/§4.9):** the spec gives `v_com = v_wheel/kV(v,s)` but kV is defined via COM speed, so the inversion is a fixed-point iteration (6 iterations; converges to ~1e-10 because kV≈1.03). Documented in `track.ts`.
+- **CI estimator (§4.9):** "95 % CI from lap-to-lap scatter" implemented as the normal approximation 1.96·SD/√n. Spec asks for a 95 % CI but not a specific estimator; normal approx keeps the engine dependency-free.
+- **W′ recovery form (§4.13):** spec gives the recovery τ but not the update; used the canonical Skiba exponential relaxation toward W′, `W′bal ← W′ − (W′−W′bal)·e^(−dt/τ)`. Depletion is the exact spec form.
+- **Pacing family (§4.14):** the three FREE parameters are (startMult, settleW, endKickFrac) per spec; the opening length (1.5 laps) and end-kick magnitude (×1.10) are fixed structural constants so the search space stays 3-D. Documented in `pacing.ts`.
+- **Integrator (§4.10):** semi-implicit (symplectic) Euler at the spec's dt=0.1 s (chosen for stability near the standing start without changing the step); a MAX_ACCEL guard and a propulsion speed-floor tame the v→0 singularity at the start. Absolute ±1.5 s fixture reproduction (gate 5) is verified in P3 with real power series.
+- **Geometry closing:** `makeTrack(L,R)` derives the straight length that closes `L = 2S + 2πR` (§3.2). The engine assumes a closing geometry; the store reconciles a venue's published S/R residual before calling the engine. (Note: the seed venues' placeholder R=23/S=42 do NOT close — that's expected per §3.2 and handled at the store/UI layer.)
+- **Full-track-model power (§5.8):** interpreted as the lap-average power to hold a constant COM speed — aero unchanged by cornering, rolling lifted by the lap-averaged kCrrLap. Reduces to the flat equation on a straight track.

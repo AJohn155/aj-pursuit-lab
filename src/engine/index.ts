@@ -1,0 +1,14 @@
+// Public engine surface (SPEC §4, §5.8). Pure TypeScript — no React/DOM (SPEC §2.1).
+
+export * from './constants'
+export * from './types'
+export * from './params'
+export * from './atmosphere'
+export * from './track'
+export * from './cda'
+export * from './simulate'
+export * from './solve'
+export * from './density'
+export * from './wprime'
+export * from './pacing'
+export * from './calculators'
