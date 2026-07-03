@@ -22,21 +22,30 @@ const WINDOW_MAX_S = 350
 const MAX_START_EXTRAP_S = 3.5
 const RACE_DISTANCE_M = 4000
 
-/** Fit the first 5 moving speed samples and return the time (relative to `start`) where v→0. */
+/**
+ * Fit the first 5 moving speed samples and return the time (relative to `start`) where
+ * v→0. Returns 0 (no refinement) when fewer than 5 samples remain, when the fit is not
+ * accelerating (slope ≤ 0 — extrapolating backward to v=0 is meaningless), or when the
+ * extrapolation lands after `start` — so a degenerate file can never produce a NaN t0 or
+ * a start refined into the future.
+ */
 function extrapolateStart(v: number[], start: number): number {
-  const xs = [0, 1, 2, 3, 4]
-  const ys = xs.map((k) => v[start + k])
-  const mx = 2
-  const my = mean(ys)
+  const N = 5
+  if (start + N > v.length) return 0
+  const mx = (N - 1) / 2
+  let my = 0
+  for (let k = 0; k < N; k++) my += v[start + k] / N
   let sxx = 0
   let sxy = 0
-  for (const x of xs) {
-    sxx += (x - mx) * (x - mx)
-    sxy += (x - mx) * (ys[x] - my)
+  for (let k = 0; k < N; k++) {
+    sxx += (k - mx) * (k - mx)
+    sxy += (k - mx) * (v[start + k] - my)
   }
   const slope = sxy / sxx
+  if (slope <= 0) return 0
   const intercept = my - slope * mx
-  return -intercept / slope // t (rel to `start`) at which the linear fit hits v = 0
+  const dt = -intercept / slope // t (rel to `start`) at which the linear fit hits v = 0
+  return dt < 0 ? dt : 0
 }
 
 export function detectRace(tl: Timeline, officialTimeS?: number): Detection {

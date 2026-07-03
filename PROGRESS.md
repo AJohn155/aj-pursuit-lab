@@ -152,3 +152,25 @@ Owner reported: global params sync correctly phone↔laptop, but venue edits don
 - **Geometry fit (§4.8) is approximate.** It recovers a consistent ~19.5 m across both rides (vs the 23 m UCI placeholder), but the rider's own cornering speed modulation confounds the raw `kV` amplitude, so only the shape/phase is reliable. Adequate as a first-pass; not gated.
 - **Detection-confirm UI is SVG, not Plotly.** §2 mandates a single Plotly chart wrapper; that lands in P4 with the ride-detail charts. P3's detection screen needs only a line + two drag handles, so SVG keeps P3 dependency-free.
 - **Tooling:** added `fit-file-parser`; added `node` to `tsconfig.app.json` types so the co-located Node-based fixture tests type-check (engine runtime purity is unaffected and separately grep-verified).
+
+---
+
+## 2026-07-03 — P3 review pass
+
+**Model:** Claude (Fable 5), via Claude Code CLI
+
+Owner-requested audit of the P3 commit (`a8c340c`) against SPEC §4 physics, §7 gate integrity, data safety, and mobile. **Findings: no severity-1 issues (no wrong physics beyond the already-approved deviations, no data-loss paths); gate tolerances verified 1:1 against §7 — none weakened** (tests actually add tighter un-specced assertions: exact record counts, strict 1 Hz spacing). Two severity-2 items found and fixed:
+
+1. **Deviations that P3 implemented but failed to list (§9 requires explicit listing) — recorded here for the permanent record:**
+   - **§4.7.3 oscillation check not implemented** (band-passed speed peaks, two-peaks-per-lap check, peak-phase-in-degrees / `peakSpeedPhaseDeg`). Deferred; needed by P4's speed-vs-position overlay and would also enable a calibrated pre-official duration estimate (the gate-2 residuals of −1.20/+1.07 s are almost entirely the uncalibrated raw-4000 m finish crossing).
+   - **§4.7.4 interior-c anchors deviate:** spec anchors the 14-lap window on "same-phase oscillation anchors"; implementation uses official-time-anchored lap-line boundaries. The spec's preference clause covers official *splits*, which we don't have (official *total* only) — so this is a real deviation, chosen because official anchoring is more robust than oscillation on these files. Gate 3 still measures a genuine interior 14-lap `c`.
+   - **§4.5.5 partially implemented:** the cross-check (±2.5 s) and the effective alignment (distance-anchoring via `calibrationRace`) exist; the ">1 % stretch → quality flag" does not (no quality-flag system until §4.16, P4). Fixture stretches are 0.49 %/0.43 %, under the threshold.
+   - **§4.6 display-only synthesized start power profile not implemented** (energy-side reconstruction is done); it's a P4 ride-detail display feature.
+   - **§4.7.2 half-lap boundaries not constructed** (needed for §5.9 fastest-half-lap records; P4/P7).
+2. **`extrapolateStart` hardening (`detect.ts`):** unguarded `v[start..start+4]` could read out of bounds on a degenerate file (effort ending within 5 samples of segment end) and propagate NaN through the whole analysis; a decelerating fit (slope ≤ 0) could "refine" t0 *forward*. Now returns no-refinement (0) in both cases, and the index-coincidence `ys[x]` loop is rewritten with explicit indices. Fixture outputs unchanged (both fixtures take the slope>0, dt<0 path).
+
+Severity-3/4 items fixed opportunistically: SpeedTrace drag-handle grab area doubled (16→32 viewBox units — was ~8 CSS px on a phone, unusable by touch); dead `officialTimeS` prop removed from SpeedTrace; odd defensive ternary removed in DetectionConfirm.
+
+Severity-3 items **deferred, on the record:** (a) `buildTimeline` selects the race segment by record count — a long gap-free warmup would win instead of the race; P4's historical-file imports should switch selection to "segment containing a valid §4.5 window"; (b) `fit.ts` `force:true` parses CRC-damaged files silently — wire into §4.16 quality flags in P4; (c) final's negative avg line height (−0.17 m) is physically impossible and encodes rollout/track-length error — P4 UI must label it as calibration residual, not hide it.
+
+**Test status after fixes:** full suite re-run — all tests passing; `tsc -b`, `npm run build`, `npm run lint` clean. Fixture gate numbers identical to the P3 entry (fixes are guards/UI-only).

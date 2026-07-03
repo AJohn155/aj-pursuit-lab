@@ -12,7 +12,6 @@ export interface SpeedTraceProps {
   v: number[]
   startT: number
   finishT: number
-  officialTimeS?: number
   onChangeStart?: (t: number) => void
   onChangeFinish?: (t: number) => void
   height?: number
@@ -112,7 +111,8 @@ export default function SpeedTrace({
           style={{ cursor: h.onDrag ? 'ew-resize' : 'default' }}
           onPointerDown={startDrag(h.onDrag)}
         >
-          <rect x={sx(h.at) - 8} y={PAD.t} width={16} height={H - PAD.t - PAD.b} fill="transparent" />
+          {/* grab area: 32 viewBox units ≈ 16 CSS px on a phone-width render — draggable by touch */}
+          <rect x={sx(h.at) - 16} y={PAD.t} width={32} height={H - PAD.t - PAD.b} fill="transparent" />
           <line x1={sx(h.at)} x2={sx(h.at)} y1={PAD.t} y2={H - PAD.b} stroke={h.color} strokeWidth={2} />
           <rect x={sx(h.at) - 5} y={PAD.t} width={10} height={10} rx={2} fill={h.color} />
           <text x={sx(h.at)} y={PAD.t + 9} fontSize={9} textAnchor="middle" fill="#fff">

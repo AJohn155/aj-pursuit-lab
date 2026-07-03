@@ -83,11 +83,10 @@ export default function DetectionConfirm() {
           </div>
 
           <SpeedTrace
-            t={loaded.timeline.v.length ? loaded.timeline.t : []}
+            t={loaded.timeline.t}
             v={loaded.timeline.v}
             startT={startT}
             finishT={finishT}
-            officialTimeS={official}
             onChangeStart={(tt) => setStartT(Math.min(tt, finishT - 1))}
             onChangeFinish={(tt) => setFinishT(Math.max(tt, startT + 1))}
           />
