@@ -149,15 +149,21 @@ export const SEED_VENUES: Omit<Venue, keyof import('./types').Persisted>[] = [
   },
 ]
 
-export async function ensureSeeded(): Promise<void> {
-  const now = new Date().toISOString()
+// Seed docs get a fixed, deliberately-ancient timestamp rather than "now".
+// If two devices each seed independently before their first sync, "now" on
+// each device would make its own fresh-but-unedited seed data look like the
+// most recent write, so last-write-wins would let it clobber a genuine edit
+// already sitting in Firestore. An ancient timestamp guarantees any real
+// edit (which always carries a current timestamp) wins the merge instead.
+const SEED_TIMESTAMP = '1970-01-01T00:00:00.000Z'
 
+export async function ensureSeeded(): Promise<void> {
   const existingSettings = await db.settings.get(SETTINGS_ID)
   if (!existingSettings) {
     await db.settings.put({
       id: SETTINGS_ID,
-      createdAt: now,
-      updatedAt: now,
+      createdAt: SEED_TIMESTAMP,
+      updatedAt: SEED_TIMESTAMP,
       ...DEFAULT_SETTINGS_VALUES,
     })
   }
@@ -168,8 +174,8 @@ export async function ensureSeeded(): Promise<void> {
       SEED_VENUES.map((v, i) => ({
         ...v,
         id: `seed-venue-${i}`,
-        createdAt: now,
-        updatedAt: now,
+        createdAt: SEED_TIMESTAMP,
+        updatedAt: SEED_TIMESTAMP,
       })),
     )
   }

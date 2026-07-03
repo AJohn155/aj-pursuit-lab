@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { dataStore } from '../DataStore'
 import { AppDatabase, SEED_VENUES, ensureSeeded } from '../db'
+import { planMerge } from '../merge'
 import { DEFAULT_SETTINGS_VALUES, SETTINGS_ID } from '../types'
 
 describe('ensureSeeded', () => {
@@ -38,6 +39,36 @@ describe('ensureSeeded', () => {
 
     const settingsAfter = await dataStore.settings.get(SETTINGS_ID)
     expect(settingsAfter?.rolloutM).toBe(2.105)
+  })
+
+  it("a genuine edit already in Firestore survives a second device's first-ever seed", async () => {
+    // Device A: edits a venue and pushes it (simulated remote state).
+    await ensureSeeded()
+    const venueA = (await dataStore.venues.getAll())[0]
+    const editedRemote = {
+      ...venueA,
+      notes: 'edited on device A',
+      updatedAt: new Date().toISOString(),
+    }
+
+    // Device B: fresh install, seeds locally for the very first time —
+    // its own copy of that same venue is still at SEED_TIMESTAMP.
+    const freshDevice = new AppDatabase()
+    await freshDevice.delete()
+    await freshDevice.open()
+    await freshDevice.close()
+    await ensureSeeded()
+    const localOnDeviceB = await dataStore.venues.getAll()
+
+    const remoteDocs = localOnDeviceB.map((v) =>
+      v.id === editedRemote.id ? editedRemote : v,
+    )
+
+    const plan = planMerge(localOnDeviceB, remoteDocs)
+
+    // The genuine edit must win and be pulled to device B, not overwritten.
+    expect(plan.toLocal.find((d) => d.id === editedRemote.id)).toEqual(editedRemote)
+    expect(plan.toRemote.find((d) => d.id === editedRemote.id)).toBeUndefined()
   })
 })
 

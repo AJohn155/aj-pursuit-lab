@@ -206,7 +206,10 @@ export default function VenueManager() {
         {venues
           .sort((a, b) => a.name.localeCompare(b.name))
           .map((v) => (
-            <VenueRow key={v.id} venue={v} />
+            // Keying on updatedAt too remounts the row (and its uncontrolled
+            // inputs) when a sync from another device changes this venue,
+            // so the edit fields don't keep showing stale values.
+            <VenueRow key={`${v.id}-${v.updatedAt}`} venue={v} />
           ))}
       </div>
     </section>

@@ -61,3 +61,18 @@ Append-only. Read this and SPEC.md before starting any session.
 - The venue "fit-geometry button" (§5.10, §4.8) is also deferred — venue geometry fitting requires ride lap data and the physics engine, neither of which exist yet in P1.
 - Firestore tombstones (remote deletes) are not synced in this pass: local deletes remove the local doc but don't currently propagate a delete to Firestore. SPEC doesn't specify delete-sync semantics; flagging so it's a conscious gap, not an oversight, when ride/scenario deletion UI lands in later phases.
 - Backup import is additive/merge-by-put, not a destructive restore — importing a backup won't remove local docs absent from the file. SPEC's "export/import full backup JSON" wording didn't specify restore semantics; merge felt safer as a default than silently deleting local data.
+
+---
+
+## 2026-07-03 — P1 fix: venue sync race + stale UI
+
+**Model:** Claude (Sonnet 4.6), via Claude Code CLI
+
+Owner reported: global params sync correctly phone↔laptop, but venue edits don't seem to. Two real bugs, found by tracing the sync path rather than reproducing directly (no browser access in this environment):
+
+1. **Seed timestamp race (`src/store/db.ts`).** `ensureSeeded()` stamped seed settings/venues with `new Date().toISOString()` — "now" — at first load. A device's *first-ever* app load seeds locally before it has synced with anyone. If that first load happens after a genuine edit was already pushed from another device, the fresh (but unedited) seed data carries a *later* timestamp than the real edit, so last-write-wins picks the stale seed data and overwrites the edit in Firestore. This is why settings appeared to work (the owner's devices had likely already synced once before that test, so the race didn't fire) while venues, tested with a device syncing for the first time, hit it. Fix: seed docs now get a fixed, deliberately-ancient `updatedAt` (`1970-01-01T00:00:00.000Z`) instead of "now", so any real edit — which always carries a current timestamp — wins regardless of seeding order across devices. Added a regression test (`db.test.ts`) simulating exactly this two-device race.
+2. **Stale uncontrolled inputs (`VenueManager.tsx`).** Venue edit fields are uncontrolled (`defaultValue`), and `VenueRow` was keyed only by `venue.id`, which never changes. An incoming sync updates the underlying data correctly, but React doesn't remount the row, so the visible input values could stay stale in an already-open tab. Fixed by keying on `` `${v.id}-${v.updatedAt}` `` so a row remounts (and its inputs re-initialize from fresh data) whenever the venue's `updatedAt` changes.
+
+**Note for the owner:** if your earlier venue edit was already overwritten by this race before the fix deployed, you'll need to re-apply it once this is live — the fix prevents the bug going forward but doesn't recover data already lost to it.
+
+**Test status:** `npm test` 17/17 passing (new regression test included); `npm run build` and `npm run lint` both clean.
