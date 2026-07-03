@@ -113,3 +113,42 @@ Owner reported: global params sync correctly phone↔laptop, but venue edits don
 - **Integrator (§4.10):** semi-implicit (symplectic) Euler at the spec's dt=0.1 s (chosen for stability near the standing start without changing the step); a MAX_ACCEL guard and a propulsion speed-floor tame the v→0 singularity at the start. Absolute ±1.5 s fixture reproduction (gate 5) is verified in P3 with real power series.
 - **Geometry closing:** `makeTrack(L,R)` derives the straight length that closes `L = 2S + 2πR` (§3.2). The engine assumes a closing geometry; the store reconciles a venue's published S/R residual before calling the engine. (Note: the seed venues' placeholder R=23/S=42 do NOT close — that's expected per §3.2 and handled at the store/UI layer.)
 - **Full-track-model power (§5.8):** interpreted as the lap-average power to hold a constant COM speed — aero unchanged by cornering, rolling lifted by the lap-averaged kCrrLap. Reduces to the flat equation on a straight track.
+
+---
+
+## 2026-07-03 — P3 Ingest
+
+**Model:** Claude (Opus 4.8), via Claude Code CLI
+
+**Completed:** the full FIT-ingest pipeline (SPEC §4.4–4.8) under `src/engine/ingest/`, the two real fixtures wired into automated gate tests, and the detection-confirm UI. `ENGINE_VERSION` bumped `0.2.0-p2` → `0.3.0-p3` (CdA formula changed — see the wheel-path fix below). All ingest is pure TS; the only new dependency, `fit-file-parser`, is DOM-free and isolated in `fit.ts`.
+
+- `fit.ts` — `fit-file-parser` adapter → record-level power/speed/distance/cadence/temperature (§4.4). Verified both fixtures: quali 326 records (first ≈8.63 m/s, 18.8 m, P=0), final 332.
+- `timeline.ts` — 1 Hz timeline over the race segment; gaps ≤5 s interpolated (flagged), >5 s split into segments (race = longest); dropout stats for the quality badge (§4.4).
+- `detect.ts` — race detection (§4.5): 10 s>250 W window (150–350 s), start anchor (walk back to v<1, else missingStart), t0 refine (linear/jerk-free extrapolation to v→0, clamp ≤3.5 s), finish = 4000 m datum crossing.
+- `laps.ts` — calibration + 16 lap boundaries (§4.7); reports interior-14-lap factor c and per-lap line height; builds calibrated-datum-speed sample groups for the CdA.
+- `start.ts` — standing-start energy reconstruction (§4.6).
+- `geometry.ts` — venue geometry fitting (§4.8): R+phase grid-search matching the kV shape to the band-passed speed.
+- `analyze.ts` — end-to-end `analyzeRide()` → detection, calibration, CdA (laps 3→16), start metrics, sim reproduction.
+- `src/components/SpeedTrace.tsx` + `src/pages/Rides/DetectionConfirm.tsx` — drop `.fit` → detect → speed trace with draggable start/finish handles + official-time field + one-click confirm (§4.5 / §5.1).
+- `data/fixtures/expected.json` — machine-readable gates; `src/engine/__tests__/fixtures.test.ts` asserts gates 1–5 against the real files; `ingest.test.ts` covers timeline/start/geometry.
+
+**Test status:** `npm test` **115/115 passing** (13 files); `tsc -b`, `npm run build`, `npm run lint` all clean. Fixture gates 1–5:
+
+| Gate | Quali | Final | Threshold | ✓ |
+|---|---|---|---|---|
+| 1 parse / 1 Hz / dropout | 326 rec, 318 s, 0 s | 332 rec, 343 s, 23 s | built + stats | ✓ |
+| 2 detection Δ vs official | −1.20 s (missingStart) | +1.07 s (v≈2.58) | ≤ 2.5 s | ✓ |
+| 3 lap count / calibration c | 16 / 0.9959 | 16 / 1.0041 | 16 / [0.99,1.01] | ✓ |
+| 4 CdA | 0.1694 | 0.1676 | [0.16,0.26], Δ<0.015 (=0.0018) | ✓ |
+| 5 sim reproduction Δ | −0.85 s | −0.82 s | ≤ ±1.5 s | ✓ |
+
+**What's next:** P4 Rides — upload flow (drop→confirm→metadata→save&analyze), CSV import, rides list, ride detail with all charts (introduce the Plotly chart wrapper here per §2).
+
+**Deviations / documented judgment calls (SPEC §9):**
+- **⚠ Wheel-path double-count between §4.7 and §4.9 (flagged to owner, approved).** As written, §4.7 calibration `c = 4000/dRaw` already absorbs the full wheel-vs-datum path excess (lean + line height), and §4.9 then divides speed by `kV` again — double-counting the lean excess by ~2%. With the literal spec the forward sim (§4.10, the physical ground truth) runs 5–8 s slow, so **gate 5 fails** (CdA also inflated to 0.179/0.183). Fix: calibration owns the wheel→datum conversion; the CdA uses the COM datum speed `v_com = c·v_wheel` and drops the `/kV`. Steady-window reproduction then goes from +4.6/+6.3 s to +0.9/+0.6 s, all gates pass, CdA = 0.169/0.168. Owner confirmed this matches his own iterative calcs (~0.164–0.17 with Crr 0.0014) and approved the deviation. Implemented in `cda.ts` (Sample now carries `vCom`); `kN` rolling lift retained (a separate effect). Consequence: **comHeightM no longer affects CdA** (it lived only in the dropped `kV` term).
+- **Detection finish = 4000 m datum crossing, not power-collapse (§4.5.3).** Power-collapse runs ~3.6 s long on the final (rider pedals ~56 m past the line), which fails gate 2; the 4000 m crossing is the timed pursuit distance and what officialTimeS / the lap-16 boundary / §4.5.5 alignment reference. Power-collapse remains the coarse window detector.
+- **Gate-5 reproduction handles the under-recorded start.** The SRM reads ~0 W while the rider is already accelerating off the gate, so simulating from a standstill with raw power starves acceleration. Reproduction instead uses the measured (real) elapsed time to the first valid-power sample, then simulates the remaining datum distance with the trustworthy measured power.
+- **Crr stays 0.0014 (drum-measured, gate-mandated); track "draggability" belongs in the venue `surfaceFactor`.** The owner's field model inflates Crr to 0.0021 to absorb corner rolling; this engine adds that corner rolling explicitly via `kN`, so it keeps 0.0014 and must not also inflate Crr (that would re-introduce a double-count).
+- **Geometry fit (§4.8) is approximate.** It recovers a consistent ~19.5 m across both rides (vs the 23 m UCI placeholder), but the rider's own cornering speed modulation confounds the raw `kV` amplitude, so only the shape/phase is reliable. Adequate as a first-pass; not gated.
+- **Detection-confirm UI is SVG, not Plotly.** §2 mandates a single Plotly chart wrapper; that lands in P4 with the ride-detail charts. P3's detection screen needs only a line + two drag handles, so SVG keeps P3 dependency-free.
+- **Tooling:** added `fit-file-parser`; added `node` to `tsconfig.app.json` types so the co-located Node-based fixture tests type-check (engine runtime purity is unaffected and separately grep-verified).

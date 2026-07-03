@@ -6,11 +6,18 @@
 //   E_aero = E_in − ΔKE − E_roll
 //   CdA    = E_aero / Σ 0.5·ρ·v_com³·Δt
 //
-// v_com = v_wheel / kV(v,s) sample-by-sample; kN(v,s) and kV(v,s) come from §4.3.
+// v_com is the COM datum speed supplied per-sample (m/s). The wheel→COM(datum)
+// conversion is done ONCE upstream, in ingest, via the §4.7 calibration factor c
+// (v_com = c·v_wheel). SPEC §4.9 as written also divides wheel speed by kV(v,s), but that
+// double-counts the wheel-path excess that c already absorbs (calibration is derived from
+// the raw wheel distance vs the known datum), leaving the forward simulator §4.10 unable
+// to reproduce the race by ~2-3%. Resolved in P3 (see PROGRESS 2026-07-03): calibration
+// owns the wheel→datum conversion; the /kV term is dropped. kN (rolling normal-force lift
+// in the bends) is a genuinely separate effect and is retained.
 
 import { G } from './constants'
 import { effectiveInertialMass } from './params'
-import { comSpeedFromWheel, cornerFactors } from './track'
+import { isBend, normalForceMultiplier } from './track'
 import type { RiderParams, Sample, TrackModel } from './types'
 
 export interface CdaInput {
@@ -51,18 +58,17 @@ export function energyBalanceCda(input: CdaInput): CdaBreakdown {
   const mEff = effectiveInertialMass(params)
   const eta = params.mechEfficiency
 
-  const first = samples[0]
-  const last = samples[samples.length - 1]
-  const vComStart = comSpeedFromWheel(first.vWheel, first.s, track, params.comHeightM)
-  const vComEnd = comSpeedFromWheel(last.vWheel, last.s, track, params.comHeightM)
+  const vComStart = samples[0].vCom
+  const vComEnd = samples[samples.length - 1].vCom
 
   let eIn = startEnergyJ
   let eRoll = 0
   let aeroDenom = 0
 
   for (const smp of samples) {
-    const vCom = comSpeedFromWheel(smp.vWheel, smp.s, track, params.comHeightM)
-    const { kN } = cornerFactors(vCom, smp.s, track, params.comHeightM)
+    const vCom = smp.vCom
+    // Rolling normal-force multiplier: kN in the bends, 1 on the straights (§4.3).
+    const kN = isBend(smp.s, track) ? normalForceMultiplier(vCom, track.bendRadiusM) : 1
     eIn += eta * smp.powerW * smp.dt
     eRoll += params.crrEff * params.massKg * G * kN * vCom * smp.dt
     aeroDenom += 0.5 * rho * vCom * vCom * vCom * smp.dt

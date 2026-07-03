@@ -1,0 +1,40 @@
+{
+  "_comment": "Machine-readable validation gates for P3 (SPEC §7). Official times and event densities are from the spec; the physics params match gate 4's stated inputs.",
+  "rides": {
+    "quali": {
+      "file": "SRM_PM9_ANDERS_TP_2025-10-24_13-18-40.fit",
+      "label": "2025 Worlds qualifying (Santiago / Peñalolén)",
+      "officialTimeS": 246.793,
+      "rho": 1.122,
+      "recordCount": 326,
+      "missingStart": true
+    },
+    "final": {
+      "file": "SRM_PM9_ANDERS_TP_2025-10-24_18-53-43.fit",
+      "label": "2025 Worlds final (Santiago / Peñalolén)",
+      "officialTimeS": 248.699,
+      "rho": 1.116,
+      "recordCount": 332,
+      "missingStart": false,
+      "startVComApproxMs": 2.6
+    }
+  },
+  "params": {
+    "massKg": 100,
+    "rotatingMassEqKg": 1.0,
+    "tyreCrr": 0.0014,
+    "surfaceFactor": 1.0,
+    "mechEfficiency": 0.98,
+    "comHeightM": 1.1
+  },
+  "track": { "lapLengthM": 250, "bendRadiusM": 23.0 },
+  "gates": {
+    "detectionToleranceS": 2.5,
+    "startVComToleranceMs": 0.6,
+    "calibrationRange": [0.99, 1.01],
+    "lapCount": 16,
+    "cdaRange": [0.16, 0.26],
+    "cdaAgreementMaxDiffM2": 0.015,
+    "simReproToleranceS": 1.5
+  }
+}

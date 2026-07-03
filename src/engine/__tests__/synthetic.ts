@@ -4,7 +4,7 @@
 // use real .fit data in P3).
 
 import { G } from '../constants'
-import { cornerFactors } from '../track'
+import { isBend, normalForceMultiplier } from '../track'
 import type { SimResult } from '../simulate'
 import type { RiderParams, Sample, TrackModel } from '../types'
 
@@ -17,12 +17,17 @@ export const DEFAULT_PARAMS: RiderParams = {
   comHeightM: 1.1,
 }
 
+/** kN at a position: normal-force multiplier in a bend, 1 on a straight (§4.3). */
+function kNAt(vCom: number, sInLap: number, track: TrackModel): number {
+  return isBend(sInLap, track) ? normalForceMultiplier(vCom, track.bendRadiusM) : 1
+}
+
 /**
  * Build samples for a lap ridden at exactly constant COM speed. At each position we solve
  * the §4.10 ODE for the instantaneous power that holds v_com constant (dv/dt = 0):
  *   P = (0.5·ρ·CdA·v³ + crrEff·m·g·kN·v) / η
- * and record the corresponding wheel speed v_wheel = v_com·kV. Because dv/dt = 0 and the
- * boundary speeds are equal, the energy-balance CdA recovers `cda` to machine precision.
+ * Because dv/dt = 0 and the boundary speeds are equal, the energy-balance CdA recovers
+ * `cda` to machine precision.
  */
 export function constantVComSamples(opts: {
   track: TrackModel
@@ -38,33 +43,29 @@ export function constantVComSamples(opts: {
   let s = 0
   for (let i = 0; i < nSamples; i++) {
     const sInLap = s % track.lapLengthM
-    const cf = cornerFactors(vCom, sInLap, track, params.comHeightM)
+    const kN = kNAt(vCom, sInLap, track)
     const powerW =
-      (0.5 * rho * cda * vCom ** 3 + params.crrEff * params.massKg * G * cf.kN * vCom) /
+      (0.5 * rho * cda * vCom ** 3 + params.crrEff * params.massKg * G * kN * vCom) /
       params.mechEfficiency
-    samples.push({ dt, powerW, vWheel: vCom * cf.kV, s: sInLap })
+    samples.push({ dt, powerW, vCom, s: sInLap })
     s += vCom * dt
   }
   return samples
 }
 
 /**
- * Extract one interior lap from a forward-sim trajectory as energy-balance Samples,
- * converting the sim's COM speed back to a wheel speed (v_wheel = v_com·kV) so the full
- * §4.9 pipeline — including the wheel→COM inversion — is exercised.
+ * Extract one interior lap from a forward-sim trajectory as energy-balance Samples. The
+ * sim already integrates COM datum speed, so it maps straight onto Sample.vCom.
  */
 export function lapSamplesFromSim(
   sim: SimResult,
   lapIndex: number,
   track: TrackModel,
-  params: RiderParams,
+  _params: RiderParams,
   dt = 0.1,
 ): Sample[] {
   const L = track.lapLengthM
   return sim.samples
     .filter((x) => x.s >= lapIndex * L && x.s < (lapIndex + 1) * L)
-    .map((x) => {
-      const cf = cornerFactors(x.v, x.s % L, track, params.comHeightM)
-      return { dt, powerW: x.p, vWheel: x.v * cf.kV, s: x.s % L }
-    })
+    .map((x) => ({ dt, powerW: x.p, vCom: x.v, s: x.s % L }))
 }

@@ -29,12 +29,13 @@ export interface RiderParams {
 /**
  * One sample on the uniform 1 Hz-style timeline. `dt` is the duration this sample
  * represents (seconds); the engine sums energy as Σ(·)·dt so non-1 Hz spacing is fine.
- * `vWheel` is the wheel-derived speed from the file; the engine converts it to COM
- * speed via the lean geometry (SPEC §4.3/§4.9). `s` is position-in-lap (m, [0,L)).
+ * `vCom` is the COM datum speed (m/s) — ingest derives it from the wheel-derived file
+ * speed via the §4.7 calibration factor (v_com = c·v_wheel); see cda.ts for why the
+ * §4.9 /kV term is not applied. `s` is position-in-lap (m, [0,L)).
  */
 export interface Sample {
   dt: number
   powerW: number
-  vWheel: number
+  vCom: number
   s: number
 }
