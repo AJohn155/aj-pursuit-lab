@@ -40,6 +40,22 @@ export const DEFAULT_SETTINGS_VALUES: Omit<Settings, keyof Persisted> = {
   wPrimeJ: 25000,
 }
 
+/**
+ * Read-time migration for Settings docs created before newer fields existed (e.g. a
+ * P1-era doc has no cpW/wPrimeJ; the type lies about them being present, and undefined
+ * would flow into wPrimeBalance as cp=NaN and be persisted into Ride.analysis). Fills
+ * missing fields from defaults; existing values always win.
+ *
+ * Deliberately NOT a write-time migration: writing the backfilled doc would bump
+ * updatedAt, and a stale device migrating late could then clobber a genuine newer edit
+ * via last-write-wins — the exact class of bug behind the P1 venue-sync incident. Every
+ * consumer normalizes on read instead; the fields get persisted naturally the first time
+ * the owner edits settings.
+ */
+export function withSettingsDefaults(settings: Settings): Settings {
+  return { ...DEFAULT_SETTINGS_VALUES, ...settings }
+}
+
 // §3.2 Venue
 export type GeometrySource = 'published' | 'fitted' | 'user'
 

@@ -190,9 +190,24 @@ export function analyzeRideFull(content: ArrayBuffer | Uint8Array, opts: Analyze
   }
   const peakPhase = peakSpeedPhaseDeg(avgProfile, track.lapLengthM, track.bendRadiusM)
 
+  // §4.16 scores "dropout seconds in race" — count interpolated samples inside the
+  // detected race window only, not across the whole timeline segment. The final fixture's
+  // segment carries ~23 s of gaps from standing at the gate BEFORE the start; those must
+  // not dock a race whose in-window recording is clean. (timeline.dropoutSeconds remains
+  // the segment-wide stat, still reported by gate 1.)
+  let raceDropoutSeconds = 0
+  let raceSampleCount = 0
+  for (let i = 0; i < timeline.t.length; i++) {
+    const tt = timeline.t[i]
+    if (tt >= detection.t0 && tt <= detection.tFinish) {
+      raceSampleCount++
+      if (timeline.interpolated[i]) raceDropoutSeconds++
+    }
+  }
+
   const quality = assessQuality({
-    dropoutSeconds: timeline.dropoutSeconds,
-    interpolatedFraction: timeline.interpolatedFraction,
+    dropoutSeconds: raceDropoutSeconds,
+    interpolatedFraction: raceSampleCount > 0 ? raceDropoutSeconds / raceSampleCount : 0,
     officialDeltaS: detection.officialDeltaS,
     calibrationFactor: laps.calibrationInterior,
     detectedLapCount: laps.lapCount,

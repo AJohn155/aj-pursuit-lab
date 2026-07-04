@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom'
 import { equivalentTimeAtRefDensity } from '../../engine/index'
 import { dataStore } from '../../store/DataStore'
 import { resolveRideDensity } from '../../store/density'
-import { SETTINGS_ID, type Ride } from '../../store/types'
+import { SETTINGS_ID, withSettingsDefaults, type Ride } from '../../store/types'
 import { useCollection } from '../../store/useCollection'
 import { BADGE_CLASSES, qualityBadgeForScore, weightedAvgPower } from './format'
 
@@ -33,8 +33,10 @@ export default function RidesList() {
 
   const rows = useMemo(() => {
     if (!settings) return []
+    // Backfill fields added after this doc was created (see store/types.ts).
+    const s = withSettingsDefaults(settings)
     const venueName = (id: string) => venues.find((v) => v.id === id)?.name ?? '—'
-    const built = rides.map((r) => buildRow(r, venueName(r.venueId), settings.referenceAirDensity, settings))
+    const built = rides.map((r) => buildRow(r, venueName(r.venueId), s.referenceAirDensity, s))
     const term = filter.trim().toLowerCase()
     const filtered = term
       ? built.filter(

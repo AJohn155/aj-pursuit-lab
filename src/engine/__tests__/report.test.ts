@@ -107,6 +107,18 @@ describe('analyzeRideFull (SPEC §4.15)', () => {
     expect(full.wBalCurve.at(-1)!.wBalJ).toBeCloseTo(lastLapWBal, 0)
   })
 
+  it('scores dropout over the race window only, not the whole segment (§4.16 "in race")', () => {
+    // The final fixture's timeline segment carries ~23 s of interpolated gaps, but nearly
+    // all of them are standing-at-the-gate time BEFORE the race start. §4.16 says "dropout
+    // seconds in race", so a clean in-window recording must not be docked for them.
+    const full = fullFor('SRM_PM9_ANDERS_TP_2025-10-24_18-53-43.fit', 248.699, 1.116)
+    expect(full.base.timeline.dropoutSeconds).toBeGreaterThan(10) // segment stat unchanged (gate 1)
+    const dropoutFlag = full.quality.flags.find((f) => f.code === 'dropout')
+    expect(dropoutFlag?.deduction ?? 0).toBeLessThan(2) // ≤ a couple of in-race seconds
+    expect(full.quality.score).toBeGreaterThanOrEqual(85) // a genuinely clean race scores green
+    expect(full.quality.badge).toBe('green')
+  })
+
   it('quality score/flags are consistent with a clean, well-detected ride', () => {
     const full = fullFor('SRM_PM9_ANDERS_TP_2025-10-24_13-18-40.fit', 246.793, 1.122)
     expect(full.quality.score).toBe(full.analysisResult.qualityScore)

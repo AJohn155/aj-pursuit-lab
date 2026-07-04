@@ -43,7 +43,8 @@ export default function SpeedTrace({
   const x0 = Math.min(t[0], startT)
   const x1 = Math.max(t[t.length - 1], finishT)
   const vMax = Math.max(...v) * 1.08
-  const pMax = p ? Math.max(...p) * 1.08 : 0
+  // Floor of 1 W keeps syPower finite on a degenerate all-zero power series.
+  const pMax = p ? Math.max(...p, 1) * 1.08 : 0
 
   const sx = (tt: number) => PAD.l + ((tt - x0) / (x1 - x0)) * (W - PAD.l - PAD.r)
   const sy = (vv: number) => PAD.t + (1 - vv / vMax) * (H - PAD.t - PAD.b)

@@ -9,7 +9,7 @@ import { ENGINE_VERSION } from '../../engine/constants'
 import { analyzeRideFull } from '../../engine/ingest'
 import { dataStore } from '../../store/DataStore'
 import { bytesToBase64, FIT_FILE_B64_MAX_BYTES } from '../../store/encoding'
-import { SETTINGS_ID, type Ride, type Settings, type Venue } from '../../store/types'
+import { SETTINGS_ID, withSettingsDefaults, type Ride, type Settings, type Venue } from '../../store/types'
 import { useCollection } from '../../store/useCollection'
 import type { DetectionConfirmResult } from './DetectionConfirm'
 
@@ -42,7 +42,9 @@ export default function MetadataForm(props: MetadataFormProps) {
   if (!settings) {
     return <p className="text-sm text-slate-500">Loading settings…</p>
   }
-  return <MetadataFormInner {...props} settings={settings} />
+  // Backfill fields added after this doc was created (e.g. cpW/wPrimeJ on a P1-era doc)
+  // so the analysis never sees undefined physics inputs (see store/types.ts).
+  return <MetadataFormInner {...props} settings={withSettingsDefaults(settings)} />
 }
 
 function MetadataFormInner({
@@ -148,7 +150,7 @@ function MetadataFormInner({
       const fitFileB64 = bytesToBase64(detection.fitBytes)
       if (fitFileB64.length > FIT_FILE_B64_MAX_BYTES) {
         setError(
-          `This file encodes to ${(fitFileB64.length / 1000).toFixed(0)} KB, over the ${FIT_FILE_B64_MAX_BYTES / 1000} KB guard — it won't be attached.`,
+          `This file encodes to ${(fitFileB64.length / 1000).toFixed(0)} KB, over the ${FIT_FILE_B64_MAX_BYTES / 1000} KB guard (Firestore 1 MB doc limit) — the ride was not saved.`,
         )
         setSaving(false)
         return

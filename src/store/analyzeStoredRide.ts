@@ -10,12 +10,15 @@ import { effectiveCrr, makeTrack } from '../engine/index'
 import type { RiderParams } from '../engine/index'
 import { base64ToBytes } from './encoding'
 import { resolveRideDensity } from './density'
-import type { Ride, Settings, Venue } from './types'
+import { withSettingsDefaults, type Ride, type Settings, type Venue } from './types'
 
-export function analyzeStoredRide(ride: Ride, venue: Venue, settings: Settings): FullRideAnalysis {
+export function analyzeStoredRide(ride: Ride, venue: Venue, rawSettings: Settings): FullRideAnalysis {
   if (!ride.fitFileB64) {
     throw new Error('This ride has no attached .fit file to analyze.')
   }
+  // Backfill fields added after this doc was created (see store/types.ts) — an old doc's
+  // missing cpW/wPrimeJ would otherwise flow into wPrimeBalance as undefined → NaN.
+  const settings = withSettingsDefaults(rawSettings)
   const fitBytes = base64ToBytes(ride.fitFileB64)
   const { rho, densityKnown } = resolveRideDensity(ride, settings)
   const track = makeTrack(venue.lapLengthM, venue.bendRadiusM)

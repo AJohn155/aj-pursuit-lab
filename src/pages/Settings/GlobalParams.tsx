@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { dataStore } from '../../store/DataStore'
-import { DEFAULT_SETTINGS_VALUES, SETTINGS_ID, type Settings } from '../../store/types'
+import { DEFAULT_SETTINGS_VALUES, SETTINGS_ID, withSettingsDefaults, type Settings } from '../../store/types'
 import { useCollection } from '../../store/useCollection'
 
 const FIELDS: {
@@ -76,8 +76,9 @@ export default function GlobalParams() {
 
   // Keying by updatedAt remounts the form (resetting the draft) whenever the
   // authoritative doc changes underneath it — e.g. an incoming sync from
-  // another device — without syncing state via an effect.
-  return <GlobalParamsForm key={settings.updatedAt} settings={settings} />
+  // another device — without syncing state via an effect. withSettingsDefaults
+  // backfills fields added after this doc was created (see store/types.ts).
+  return <GlobalParamsForm key={settings.updatedAt} settings={withSettingsDefaults(settings)} />
 }
 
 function GlobalParamsForm({ settings }: { settings: Settings }) {
