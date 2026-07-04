@@ -91,6 +91,7 @@ export default function DetectionConfirm({ onConfirm }: { onConfirm: (result: De
           <SpeedTrace
             t={loaded.timeline.t}
             v={loaded.timeline.v}
+            p={loaded.timeline.p}
             startT={startT}
             finishT={finishT}
             onChangeStart={(tt) => setStartT(Math.min(tt, finishT - 1))}

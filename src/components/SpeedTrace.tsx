@@ -1,15 +1,19 @@
-// Speed trace with draggable start/finish handles for the race-detection confirm screen
-// (SPEC §4.5 / §5.1). Self-contained SVG — the app's Plotly chart wrapper (§2) lands in P4;
-// this needs only a line plot plus two drag handles, so SVG keeps P3 dependency-free.
+// Speed + power trace with draggable start/finish handles for the race-detection confirm
+// screen (SPEC §4.5 / §5.1). Self-contained SVG — the app's Plotly chart wrapper (§2) lands
+// in P4; this needs only two line plots plus two drag handles, so SVG keeps this dependency-
+// free. Power gets its own right-side axis since it's a wildly different scale (~0-1400 W
+// vs ~0-20 m/s) — overlaying on one axis would flatten one of the two traces to noise.
 
 import { useRef } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 
 export interface SpeedTraceProps {
-  /** Elapsed seconds (parallel to v). */
+  /** Elapsed seconds (parallel to v and p). */
   t: number[]
   /** Speed, m/s. */
   v: number[]
+  /** Power, W. Optional — omit to fall back to the speed-only trace. */
+  p?: number[]
   startT: number
   finishT: number
   onChangeStart?: (t: number) => void
@@ -18,11 +22,15 @@ export interface SpeedTraceProps {
 }
 
 const W = 720
-const PAD = { l: 40, r: 12, t: 12, b: 26 }
+const PAD_WITH_POWER = { l: 40, r: 44, t: 22, b: 26 }
+const PAD_SPEED_ONLY = { l: 40, r: 12, t: 12, b: 26 }
+const SPEED_COLOR = '#334155'
+const POWER_COLOR = '#ea580c'
 
 export default function SpeedTrace({
   t,
   v,
+  p,
   startT,
   finishT,
   onChangeStart,
@@ -31,14 +39,18 @@ export default function SpeedTrace({
 }: SpeedTraceProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const H = height
+  const PAD = p ? PAD_WITH_POWER : PAD_SPEED_ONLY
   const x0 = Math.min(t[0], startT)
   const x1 = Math.max(t[t.length - 1], finishT)
   const vMax = Math.max(...v) * 1.08
+  const pMax = p ? Math.max(...p) * 1.08 : 0
 
   const sx = (tt: number) => PAD.l + ((tt - x0) / (x1 - x0)) * (W - PAD.l - PAD.r)
   const sy = (vv: number) => PAD.t + (1 - vv / vMax) * (H - PAD.t - PAD.b)
+  const syPower = (pp: number) => PAD.t + (1 - pp / pMax) * (H - PAD.t - PAD.b)
 
   const line = t.map((tt, i) => `${sx(tt).toFixed(1)},${sy(v[i]).toFixed(1)}`).join(' ')
+  const powerLine = p ? t.map((tt, i) => `${sx(tt).toFixed(1)},${syPower(p[i]).toFixed(1)}`).join(' ') : ''
 
   const timeAtClientX = (clientX: number) => {
     const rect = svgRef.current?.getBoundingClientRect()
@@ -65,6 +77,13 @@ export default function SpeedTrace({
   const xTicks: number[] = []
   for (let tt = Math.ceil(x0 / xTickStep) * xTickStep; tt <= x1; tt += xTickStep) xTicks.push(tt)
 
+  // Power ticks: pick the smallest "nice" step that keeps to ~4 ticks over the range.
+  const powerTicks: number[] = []
+  if (p) {
+    const step = [50, 100, 200, 250, 500, 1000, 2000].find((s) => pMax / s <= 4) ?? 2000
+    for (let pp = 0; pp <= pMax; pp += step) powerTicks.push(pp)
+  }
+
   const handles = [
     { at: startT, color: '#16a34a', label: 'S', onDrag: onChangeStart },
     { at: finishT, color: '#dc2626', label: 'F', onDrag: onChangeFinish },
@@ -76,7 +95,11 @@ export default function SpeedTrace({
       viewBox={`0 0 ${W} ${H}`}
       width="100%"
       role="img"
-      aria-label="Speed trace with draggable race start and finish handles"
+      aria-label={
+        p
+          ? 'Speed and power trace with draggable race start and finish handles'
+          : 'Speed trace with draggable race start and finish handles'
+      }
       style={{ touchAction: 'none', userSelect: 'none' }}
     >
       {/* detected race window shading */}
@@ -97,13 +120,33 @@ export default function SpeedTrace({
           </text>
         </g>
       ))}
+      {powerTicks.map((pp) => (
+        <text key={`p${pp}`} x={W - PAD.r + 5} y={syPower(pp) + 3} fontSize={9} textAnchor="start" fill={POWER_COLOR}>
+          {pp}
+        </text>
+      ))}
       {xTicks.map((tt) => (
         <text key={`x${tt}`} x={sx(tt)} y={H - PAD.b + 14} fontSize={9} textAnchor="middle" fill="#94a3b8">
           {tt}s
         </text>
       ))}
+      {/* power line (drawn under speed so speed + handles stay on top) */}
+      {p && <polyline points={powerLine} fill="none" stroke={POWER_COLOR} strokeWidth={1} opacity={0.8} />}
       {/* speed line */}
-      <polyline points={line} fill="none" stroke="#334155" strokeWidth={1.25} />
+      <polyline points={line} fill="none" stroke={SPEED_COLOR} strokeWidth={1.25} />
+      {/* legend */}
+      {p && (
+        <g fontSize={9}>
+          <line x1={PAD.l} x2={PAD.l + 14} y1={PAD.t - 4} y2={PAD.t - 4} stroke={SPEED_COLOR} strokeWidth={1.5} />
+          <text x={PAD.l + 18} y={PAD.t - 1} fill="#64748b">
+            Speed (m/s)
+          </text>
+          <line x1={PAD.l + 90} x2={PAD.l + 104} y1={PAD.t - 4} y2={PAD.t - 4} stroke={POWER_COLOR} strokeWidth={1.5} />
+          <text x={PAD.l + 108} y={PAD.t - 1} fill="#64748b">
+            Power (W)
+          </text>
+        </g>
+      )}
       {/* draggable start/finish handles */}
       {handles.map((h) => (
         <g
