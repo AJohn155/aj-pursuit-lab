@@ -29,6 +29,15 @@ export interface SimInput {
   v0?: number
   /** Hard guard on simulated time, s (default 900). Prevents runaway if power is too low. */
   maxTimeS?: number
+  /**
+   * Position already covered within the current lap when the sim starts (m, default 0).
+   * Lap-line crossings are placed at `n·L − lapPhaseOffsetM`, so they still land on true
+   * datum multiples of L even when the sim doesn't start from an exact lap boundary —
+   * needed when `distanceM` is a partial remainder (e.g. a scenario resuming mid-lap
+   * after skipping an under-recorded standing-start prefix; see store/scenario.ts). §4.10
+   * reproduction/validation never sets this, so it defaults to 0 and is fully inert there.
+   */
+  lapPhaseOffsetM?: number
 }
 
 export interface SimResult {
@@ -92,12 +101,13 @@ export function simulate(input: SimInput): SimResult {
     dt = 0.1,
     v0 = 0.5,
     maxTimeS = 900,
+    lapPhaseOffsetM = 0,
   } = input
 
   const mEff = effectiveInertialMass(params)
   const eta = params.mechEfficiency
   const L = track.lapLengthM
-  const nLaps = Math.round(distanceM / L)
+  const nLaps = Math.round((distanceM + lapPhaseOffsetM) / L)
 
   const samples: SimResult['samples'] = []
   const lapSplits: number[] = []
@@ -107,7 +117,7 @@ export function simulate(input: SimInput): SimResult {
   let v = v0
   samples.push({ t, s, v, p: powerAt(power, t, s) })
 
-  let nextLapDist = L
+  let nextLapDist = L - lapPhaseOffsetM
   let timedOut = false
 
   while (s < distanceM) {

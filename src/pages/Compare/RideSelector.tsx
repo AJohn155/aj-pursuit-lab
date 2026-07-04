@@ -34,13 +34,14 @@ export default function RideSelector({
         <table className="w-full min-w-[520px] text-left text-sm">
           <tbody>
             {sorted.map((ride) => {
-              const idx = selectedIds.indexOf(ride.id)
+              const key = `ride:${ride.id}`
+              const idx = selectedIds.indexOf(key)
               const selected = idx >= 0
               return (
                 <tr
                   key={ride.id}
                   className={`cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50 ${selected ? 'bg-slate-50' : ''}`}
-                  onClick={() => toggle(ride.id)}
+                  onClick={() => toggle(key)}
                 >
                   <td className="w-8 px-3 py-2">
                     <input type="checkbox" checked={selected} readOnly className="h-4 w-4" />

@@ -12,12 +12,16 @@ export function colorFor(index: number): string {
   return COMPARE_COLORS[index % COMPARE_COLORS.length]
 }
 
-/** One selected ride, fully analyzed, ready for any of the Compare charts. */
+/** One selected ride or pinned scenario, fully analyzed, ready for any of the Compare
+ * charts — a scenario's `full` is a synthetic FullRideAnalysis built by
+ * `scenarioToFullAnalysis` (store/scenario.ts) from its simulated trajectory, shaped
+ * identically to a real ride's so no chart component needs to know the difference. */
 export interface CompareItem {
   id: string
   label: string
   color: string
   full: FullRideAnalysis
+  lapLengthM: number
 }
 
 /** Cumulative calibrated (datum) distance vs elapsed race time, 1 Hz, whole race. */
