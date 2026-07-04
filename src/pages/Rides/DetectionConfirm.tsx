@@ -1,6 +1,7 @@
 // Race-detection confirm screen (SPEC §4.5 / §5.1). Drop a .fit → parse → detect → show the
 // speed trace with draggable start/finish handles + official-time field → one-click confirm.
-// The downstream metadata form + save/analyze is P4; this is the detection step of P3.
+// Confirming hands the raw file bytes + confirmed official time up to the parent upload
+// flow, which continues to the metadata form (§5.1).
 
 import { useState } from 'react'
 import SpeedTrace from '../../components/SpeedTrace'
@@ -11,24 +12,29 @@ interface Loaded {
   timeline: Timeline
   detection: Detection
   fileName: string
+  fitBytes: Uint8Array
 }
 
-export default function DetectionConfirm() {
+export interface DetectionConfirmResult {
+  fitBytes: Uint8Array
+  fileName: string
+  officialTimeS: number
+}
+
+export default function DetectionConfirm({ onConfirm }: { onConfirm: (result: DetectionConfirmResult) => void }) {
   const [loaded, setLoaded] = useState<Loaded | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [officialTimeS, setOfficialTimeS] = useState('')
   const [startT, setStartT] = useState(0)
   const [finishT, setFinishT] = useState(0)
-  const [confirmed, setConfirmed] = useState(false)
 
   async function handleFile(file: File) {
     setError(null)
-    setConfirmed(false)
     try {
-      const buf = new Uint8Array(await file.arrayBuffer())
-      const timeline = buildTimeline(parseFitRecords(buf))
+      const fitBytes = new Uint8Array(await file.arrayBuffer())
+      const timeline = buildTimeline(parseFitRecords(fitBytes))
       const detection = detectRace(timeline)
-      setLoaded({ timeline, detection, fileName: file.name })
+      setLoaded({ timeline, detection, fileName: file.name, fitBytes })
       setStartT(detection.t0)
       setFinishT(detection.tFinish)
       setOfficialTimeS(detection.detectedDurationS.toFixed(3))
@@ -124,19 +130,15 @@ export default function DetectionConfirm() {
             )}
             <button
               type="button"
-              onClick={() => setConfirmed(true)}
-              className="ml-auto rounded-lg bg-slate-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
+              disabled={!Number.isFinite(official) || official <= 0}
+              onClick={() =>
+                onConfirm({ fitBytes: loaded.fitBytes, fileName: loaded.fileName, officialTimeS: official })
+              }
+              className="ml-auto rounded-lg bg-slate-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               Confirm detection
             </button>
           </div>
-
-          {confirmed && (
-            <p className="text-sm text-green-700">
-              Detection confirmed at start {startT.toFixed(1)}s / finish {finishT.toFixed(1)}s.
-              Metadata entry &amp; save/analyze come in P4.
-            </p>
-          )}
         </div>
       )}
     </div>

@@ -51,6 +51,19 @@ const FIELDS: {
     provenance: "Matches the owner's historical normalization convention.",
     step: '0.001',
   },
+  {
+    key: 'cpW',
+    label: 'Critical power (W)',
+    provenance:
+      'A real fit (§4.13) needs power-duration points at several different lengths; with only ~4 min pursuit efforts on file, set this manually until mixed-duration history exists.',
+    step: '1',
+  },
+  {
+    key: 'wPrimeJ',
+    label: "W′ (J)",
+    provenance: 'Anaerobic work capacity above CP. Same manual-until-fittable caveat as CP.',
+    step: '500',
+  },
 ]
 
 export default function GlobalParams() {

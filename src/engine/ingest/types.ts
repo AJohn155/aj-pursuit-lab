@@ -23,6 +23,8 @@ export interface Timeline {
   p: number[]
   /** Cumulative wheel distance, m. */
   d: number[]
+  /** Cadence, rpm. */
+  cad: number[]
   /** True where the sample was interpolated across a gap (≤5 s). */
   interpolated: boolean[]
   /** Seconds within the race segment that were interpolated (the quality-badge input). */

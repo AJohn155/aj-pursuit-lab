@@ -1,5 +1,7 @@
 // Data model per SPEC.md §3. All persisted objects carry id/createdAt/updatedAt (ISO strings).
 
+import type { AnalysisResult } from '../engine/ingest'
+
 export interface Persisted {
   id: string
   createdAt: string
@@ -15,6 +17,13 @@ export interface Settings extends Persisted {
   comHeightM: number
   rotatingMassEqKg: number
   referenceAirDensity: number
+  // CP/W′ (§4.13/§5.10). A real mean-maximal-power fit (estimateCpWprime, built in P2)
+  // needs points at several different durations; with only 4 km pursuit efforts on file
+  // so far (all ~4 minutes), that fit is underdetermined from one duration. These are a
+  // manually-set starting point — generic elite-endurance-track values — that the W′bal
+  // chart uses against each ride's real power series; tune here once real history exists.
+  cpW: number
+  wPrimeJ: number
 }
 
 export const SETTINGS_ID = 'settings'
@@ -27,6 +36,8 @@ export const DEFAULT_SETTINGS_VALUES: Omit<Settings, keyof Persisted> = {
   comHeightM: 1.1,
   rotatingMassEqKg: 1.0,
   referenceAirDensity: 1.15,
+  cpW: 400,
+  wPrimeJ: 25000,
 }
 
 // §3.2 Venue
@@ -62,12 +73,19 @@ export interface Ride extends Persisted {
   pressureHPa?: number
   humidityPct?: number
   systemMassKg: number
+  /**
+   * Owner-recorded average power for rides with no attached .fit file (SPEC §3.6 CSV
+   * import lists "avg power" as a mapped column, but there's no per-second data to derive
+   * it from without a file). Ignored once a real analysis exists — `analysis` is
+   * engine-derived and always takes priority for display.
+   */
+  manualAvgPowerW?: number
   kit: string[]
   notes: string
   flags: { outdoor: boolean; caughtRider: boolean; interrupted: boolean }
   result?: string
   fitFileB64?: string
-  analysis?: unknown
+  analysis?: AnalysisResult
   analysisVersion: string
 }
 

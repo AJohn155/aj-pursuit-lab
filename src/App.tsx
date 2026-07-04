@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import TabShell from './components/TabShell'
 import Rides from './pages/Rides'
+import RideDetail from './pages/Rides/RideDetail'
 import Compare from './pages/Compare'
 import Adjuster from './pages/Adjuster'
 import WattsToWin from './pages/WattsToWin'
@@ -17,6 +18,7 @@ export default function App() {
       <Route element={<TabShell />}>
         <Route index element={<Navigate to="/rides" replace />} />
         <Route path="rides" element={<Rides />} />
+        <Route path="rides/:id" element={<RideDetail />} />
         <Route path="compare" element={<Compare />} />
         <Route path="adjuster" element={<Adjuster />} />
         <Route path="watts-to-win" element={<WattsToWin />} />

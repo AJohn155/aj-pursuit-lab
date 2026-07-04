@@ -17,14 +17,20 @@ const STEADY_FIRST_LAP = 3
 const STEADY_LAST_LAP = 15
 
 /**
- * Band-passed wheel-speed profile per steady lap: mean speed in each of `nBins` position
- * bins over [0, L), with the lap mean removed. One array per lap.
+ * Band-passed wheel-speed profile per lap in `[firstLap, lastLap]` (1-based, inclusive):
+ * mean speed in each of `nBins` position bins over [0, L), with the lap mean removed. One
+ * array per lap. Defaults to the steady window (laps 3–15) used by the geometry fit;
+ * `peakSpeedPhaseDeg` below uses the full race instead.
  */
 export function steadyLapSpeedProfiles(
   tl: Timeline,
   laps: LapConstruction,
   lapLengthM: number,
   nBins = 25,
+  lapRange: { firstLap: number; lastLap: number } = {
+    firstLap: STEADY_FIRST_LAP,
+    lastLap: STEADY_LAST_LAP,
+  },
 ): number[][] {
   const { t, v, d } = tl
   const c = laps.calibrationInterior
@@ -32,7 +38,7 @@ export function steadyLapSpeedProfiles(
   const L = lapLengthM
   const profiles: number[][] = []
 
-  for (let ln = STEADY_FIRST_LAP - 1; ln <= STEADY_LAST_LAP - 1; ln++) {
+  for (let ln = lapRange.firstLap - 1; ln <= lapRange.lastLap - 1; ln++) {
     const a = laps.lapBoundaryTimes[ln]
     const b = laps.lapBoundaryTimes[ln + 1]
     if (Number.isNaN(a) || Number.isNaN(b)) continue
@@ -122,4 +128,44 @@ export function fitVenueGeometry(
     }
   }
   return best
+}
+
+/**
+ * Position of maximum wheel speed within the lap, in degrees of bend arc (SPEC §4.15
+ * `peakSpeedPhaseDeg` / §4.7.3 "peak phase ... in degrees of bend arc"). Approximation: uses
+ * the argmax of the averaged band-passed profile (same profile the geometry fit consumes)
+ * rather than a full per-lap oscillation-peak detector (§4.7.3, not implemented — see
+ * PROGRESS.md). 0° = bend entry, 180° = bend exit. If the peak bin falls on a straight
+ * (real pacing dynamics can dominate the tiny kV bump), it's snapped to the nearer edge of
+ * the nearer bend.
+ */
+export function peakSpeedPhaseDeg(profile: number[], lapLengthM: number, bendRadiusM: number): number {
+  const L = lapLengthM
+  const S = (L - 2 * Math.PI * bendRadiusM) / 2
+  const arc = Math.PI * bendRadiusM
+  const nBins = profile.length
+  if (nBins === 0) return 0
+
+  let peakIdx = 0
+  for (let i = 1; i < nBins; i++) if (profile[i] > profile[peakIdx]) peakIdx = i
+  const s = ((peakIdx + 0.5) / nBins) * L
+
+  const bends = [
+    { start: S, end: S + arc },
+    { start: 2 * S + arc, end: L },
+  ]
+  for (const bend of bends) {
+    if (s >= bend.start && s <= bend.end) {
+      return ((s - bend.start) / (bend.end - bend.start)) * 180
+    }
+  }
+
+  let best = { deg: 0, dist: Number.POSITIVE_INFINITY }
+  for (const bend of bends) {
+    const dStart = Math.abs(s - bend.start)
+    const dEnd = Math.abs(s - bend.end)
+    if (dStart < best.dist) best = { deg: 0, dist: dStart }
+    if (dEnd < best.dist) best = { deg: 180, dist: dEnd }
+  }
+  return best.deg
 }

@@ -148,6 +148,51 @@ export function cdaRace(
 export const CDA_SANE_MIN = 0.16
 export const CDA_SANE_MAX = 0.26
 
+export interface RollingCdaPoint {
+  /** Distance from race start at the window center, m. */
+  centerDistM: number
+  cdaM2: number
+}
+
+/**
+ * Rolling CdA (SPEC §4.9 `cdaRolling`): centered ~1-lap window, step ¼ lap, over a
+ * continuous distance axis. Display-only diagnostic — shows drift/noise within the race
+ * that the single `cdaRace` window averages away. `samples`/`distCumM` are a
+ * time-ordered pair (same length): samples with a cumulative datum distance from the race
+ * start (see ingest/laps.ts `raceSampleSeries`).
+ */
+export function cdaRolling(
+  samples: Sample[],
+  distCumM: number[],
+  rho: number,
+  params: RiderParams,
+  track: TrackModel,
+  windowM: number = track.lapLengthM,
+  stepM: number = track.lapLengthM / 4,
+): RollingCdaPoint[] {
+  if (samples.length !== distCumM.length) {
+    throw new Error('cdaRolling: samples and distCumM must be the same length')
+  }
+  if (samples.length === 0) return []
+
+  const dMin = distCumM[0]
+  const dMax = distCumM[distCumM.length - 1]
+  const points: RollingCdaPoint[] = []
+
+  for (let center = dMin + windowM / 2; center + windowM / 2 <= dMax; center += stepM) {
+    const lo = center - windowM / 2
+    const hi = center + windowM / 2
+    const windowSamples: Sample[] = []
+    for (let i = 0; i < samples.length; i++) {
+      if (distCumM[i] >= lo && distCumM[i] < hi) windowSamples.push(samples[i])
+    }
+    if (windowSamples.length < 2) continue
+    const cdaM2 = energyBalanceCda({ samples: windowSamples, rho, params, track }).cdaM2
+    points.push({ centerDistM: center, cdaM2 })
+  }
+  return points
+}
+
 export function cdaInSaneRange(cdaM2: number): boolean {
   return cdaM2 >= CDA_SANE_MIN && cdaM2 <= CDA_SANE_MAX
 }

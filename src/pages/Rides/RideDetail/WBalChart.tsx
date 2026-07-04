@@ -1,0 +1,32 @@
+// W′bal curve (SPEC §4.13 / §5.1).
+
+import type { WBalPoint } from '../../../engine/ingest'
+import Chart from '../../../components/Chart'
+
+export default function WBalChart({ curve }: { curve: WBalPoint[] }) {
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-4">
+      <h2 className="mb-2 text-sm font-semibold text-slate-900">W′ balance</h2>
+      <Chart
+        ariaLabel="W prime balance over the race, kilojoules; a negative value means the anaerobic tank was over-drawn"
+        data={[
+          {
+            type: 'scatter',
+            mode: 'lines',
+            x: curve.map((p) => p.tS),
+            y: curve.map((p) => p.wBalJ / 1000),
+            line: { color: '#0891b2' },
+            name: "W'bal",
+            fill: 'tozeroy',
+          },
+        ]}
+        layout={{
+          xaxis: { title: { text: 's' } },
+          yaxis: { title: { text: 'kJ' } },
+          shapes: [{ type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 0, y1: 0, line: { color: '#94a3b8', dash: 'dot' } }],
+        }}
+        height={240}
+      />
+    </section>
+  )
+}

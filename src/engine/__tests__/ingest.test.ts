@@ -7,10 +7,13 @@ import { describe, expect, it } from 'vitest'
 import {
   analyzeRide,
   buildTimeline,
+  computeAccelDecel,
   constructLaps,
   detectRace,
   fitVenueGeometry,
+  lapSpeedVsPositionSeries,
   parseFitRecords,
+  peakSpeedPhaseDeg,
   splitSegments,
   steadyLapSpeedProfiles,
 } from '../ingest'
@@ -84,6 +87,26 @@ describe('start reconstruction on fixtures (SPEC §4.6)', () => {
   })
 })
 
+describe('per-lap line height, missing-start regression (SPEC §4.7.4)', () => {
+  // Lap 1's start boundary is t0, which for a missingStart race is extrapolated backward
+  // past the timeline's first real sample. Using interpAt there (rather than the already
+  // triangular-extrapolated detection.d0) understated how far back the true start line
+  // was, distorting lap 1's raw distance and producing a physically impossible multi-metre
+  // "line height". Regression: lap 1 should read consistently with the rest of the race.
+  it('lap 1 line height is sane and consistent with later laps on a missingStart race', () => {
+    const officialTimeS = 246.793
+    const tl = buildTimeline(
+      parseFitRecords(fs.readFileSync(`${fixturesDir}SRM_PM9_ANDERS_TP_2025-10-24_13-18-40.fit`)),
+    )
+    const det = detectRace(tl, officialTimeS)
+    expect(det.missingStart).toBe(true) // precondition: this is the scenario that triggered the bug
+    const laps = constructLaps(tl, det, officialTimeS)
+
+    expect(Math.abs(laps.lineHeightsM[0])).toBeLessThan(1) // was ~2.24 m before the fix
+    expect(laps.lineHeightsM[0]).toBeCloseTo(laps.lineHeightsM[7], 1) // consistent with a mid-race lap
+  })
+})
+
 describe('venue geometry fitting (SPEC §4.8)', () => {
   function fitFor(file: string, officialTimeS: number) {
     const tl = buildTimeline(parseFitRecords(fs.readFileSync(`${fixturesDir}${file}`)))
@@ -102,5 +125,92 @@ describe('venue geometry fitting (SPEC §4.8)', () => {
     }
     // Independent rides at the same venue should fit a similar radius.
     expect(Math.abs(q.bendRadiusM - f.bendRadiusM)).toBeLessThan(3)
+  })
+})
+
+describe('peakSpeedPhaseDeg (SPEC §4.15 / §4.7.3 approximation)', () => {
+  const L = 250
+  const R = 23
+  const S = (L - 2 * Math.PI * R) / 2
+  const arc = Math.PI * R
+
+  it('reports ~0° when the peak sits at a bend entry', () => {
+    const nBins = 100
+    const profile = new Array(nBins).fill(0)
+    profile[Math.floor((S / L) * nBins)] = 1
+    // Bin quantization puts the sampled bin center a fraction past S; small and non-negative.
+    const deg = peakSpeedPhaseDeg(profile, L, R)
+    expect(deg).toBeGreaterThanOrEqual(0)
+    expect(deg).toBeLessThan(5)
+  })
+
+  it('reports ~180° when the peak sits at a bend exit', () => {
+    const nBins = 100
+    const profile = new Array(nBins).fill(0)
+    profile[Math.min(nBins - 1, Math.floor(((S + arc) / L) * nBins))] = 1
+    expect(peakSpeedPhaseDeg(profile, L, R)).toBeGreaterThan(90)
+  })
+
+  it('reports the fractional position within a bend (mid-bend ≈ 90°)', () => {
+    const nBins = 200
+    const profile = new Array(nBins).fill(0)
+    profile[Math.floor(((S + arc / 2) / L) * nBins)] = 1
+    const deg = peakSpeedPhaseDeg(profile, L, R)
+    expect(deg).toBeGreaterThan(85)
+    expect(deg).toBeLessThan(95)
+  })
+
+  it('snaps a straight-line peak to the nearer bend edge', () => {
+    const nBins = 100
+    const profile = new Array(nBins).fill(0)
+    profile[Math.floor((S / 2 / L) * nBins)] = 1 // middle of straight 1, nearer to bend1 entry
+    expect(peakSpeedPhaseDeg(profile, L, R)).toBe(0)
+  })
+
+  it('returns 0 for an empty profile rather than throwing', () => {
+    expect(peakSpeedPhaseDeg([], L, R)).toBe(0)
+  })
+})
+
+describe('accel/decel summary on fixtures (SPEC §4.15 accelDecel)', () => {
+  function accelDecelFor(file: string, officialTimeS: number) {
+    const tl = buildTimeline(parseFitRecords(fs.readFileSync(`${fixturesDir}${file}`)))
+    const det = detectRace(tl, officialTimeS)
+    const laps = constructLaps(tl, det, officialTimeS)
+    return computeAccelDecel(tl, laps)
+  }
+
+  it('classifies every in-race second as accel, decel, or steady, with a plausible split', () => {
+    const q = accelDecelFor('SRM_PM9_ANDERS_TP_2025-10-24_13-18-40.fit', 246.793)
+    expect(q.sAccel).toBeGreaterThan(0)
+    expect(q.sDecel).toBeGreaterThan(0)
+    expect(q.byLap).toHaveLength(16)
+    expect(q.byLap.map((l) => l.lap)).toEqual(Array.from({ length: 16 }, (_, i) => i + 1))
+    // The standing-start lap accelerates far more than it decelerates.
+    expect(q.byLap[0].sAccel).toBeGreaterThan(q.byLap[0].sDecel)
+    // Totals equal the sum of per-lap counts.
+    expect(q.byLap.reduce((s, l) => s + l.sAccel, 0)).toBe(q.sAccel)
+    expect(q.byLap.reduce((s, l) => s + l.sDecel, 0)).toBe(q.sDecel)
+  })
+})
+
+describe('speed-vs-position overlay on fixtures (SPEC §5.1)', () => {
+  it('returns one position-sorted series per lap, positions within [0, L)', () => {
+    const tl = buildTimeline(
+      parseFitRecords(fs.readFileSync(`${fixturesDir}SRM_PM9_ANDERS_TP_2025-10-24_13-18-40.fit`)),
+    )
+    const det = detectRace(tl, 246.793)
+    const laps = constructLaps(tl, det, 246.793)
+    const overlay = lapSpeedVsPositionSeries(tl, laps, 250)
+
+    expect(overlay).toHaveLength(16)
+    for (const lap of overlay) {
+      expect(lap.posM.length).toBe(lap.speedMs.length)
+      for (const s of lap.posM) {
+        expect(s).toBeGreaterThanOrEqual(0)
+        expect(s).toBeLessThan(250)
+      }
+      for (let i = 1; i < lap.posM.length; i++) expect(lap.posM[i]).toBeGreaterThanOrEqual(lap.posM[i - 1])
+    }
   })
 })

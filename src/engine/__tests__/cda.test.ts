@@ -5,6 +5,7 @@ import {
   cdaInSaneRange,
   cdaPerLap,
   cdaRace,
+  cdaRolling,
   ci95FromScatter,
   energyBalanceCda,
 } from '../cda'
@@ -136,5 +137,40 @@ describe('two-ride agreement + sane range (synthetic gate 4, SPEC §7)', () => {
     expect(cdaInSaneRange(CDA_SANE_MAX)).toBe(true)
     expect(cdaInSaneRange(0.15)).toBe(false)
     expect(cdaInSaneRange(0.27)).toBe(false)
+  })
+})
+
+describe('cdaRolling (SPEC §4.9 display-only diagnostic)', () => {
+  // Build a continuous 4-lap constant-COM-speed series with its cumulative datum distance
+  // tracked alongside (constantVComSamples doesn't carry distance, so it's derived here
+  // from the same constant-speed stepping the helper uses internally).
+  function seriesWithDistance(cda: number, rho: number, vCom: number, dt = 0.1, laps = 4) {
+    const nSamples = Math.round((laps * track.lapLengthM) / (vCom * dt))
+    const samples = constantVComSamples({ track, params, rho, cda, vCom, nSamples, dt })
+    const distCumM = samples.map((_, i) => i * vCom * dt)
+    return { samples, distCumM }
+  }
+
+  it('recovers the ground-truth CdA at every rolling window on a uniform effort', () => {
+    const { samples, distCumM } = seriesWithDistance(0.2, 1.122, 17)
+    const points = cdaRolling(samples, distCumM, 1.122, params, track)
+    expect(points.length).toBeGreaterThan(5)
+    for (const p of points) expect(p.cdaM2).toBeCloseTo(0.2, 3)
+  })
+
+  it('window centers advance by the ¼-lap step and stay within the data span', () => {
+    const { samples, distCumM } = seriesWithDistance(0.2, 1.122, 17)
+    const points = cdaRolling(samples, distCumM, 1.122, params, track)
+    for (let i = 1; i < points.length; i++) {
+      expect(points[i].centerDistM - points[i - 1].centerDistM).toBeCloseTo(track.lapLengthM / 4, 6)
+    }
+    const halfWindow = track.lapLengthM / 2
+    expect(points[0].centerDistM).toBeGreaterThanOrEqual(distCumM[0] + halfWindow - 1e-6)
+    expect(points.at(-1)!.centerDistM).toBeLessThanOrEqual(distCumM.at(-1)! - halfWindow + 1e-6)
+  })
+
+  it('returns empty for mismatched-length inputs guard and for empty input', () => {
+    expect(() => cdaRolling([{ dt: 1, powerW: 1, vCom: 1, s: 0 }], [], 1.15, params, track)).toThrow()
+    expect(cdaRolling([], [], 1.15, params, track)).toEqual([])
   })
 })

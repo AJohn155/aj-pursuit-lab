@@ -45,6 +45,7 @@ export function buildTimeline(records: FitRecord[]): Timeline {
   const v: number[] = []
   const p: number[] = []
   const d: number[] = []
+  const cad: number[] = []
   const interpolated: boolean[] = []
 
   let j = 0
@@ -59,6 +60,7 @@ export function buildTimeline(records: FitRecord[]): Timeline {
     v.push(lerp(a.speedMs, b.speedMs, f))
     p.push(lerp(a.powerW, b.powerW, f))
     d.push(lerp(a.distanceM, b.distanceM, f))
+    cad.push(lerp(a.cadenceRpm ?? 0, b.cadenceRpm ?? 0, f))
     interpolated.push(!rawSeconds.has(now))
   }
 
@@ -68,6 +70,7 @@ export function buildTimeline(records: FitRecord[]): Timeline {
     v,
     p,
     d,
+    cad,
     interpolated,
     dropoutSeconds,
     interpolatedFraction: dropoutSeconds / n,

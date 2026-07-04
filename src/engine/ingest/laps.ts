@@ -46,11 +46,16 @@ export function constructLaps(
   // Per-lap line height: (raw lap distance − datum) / 2π, using the rollout-true factor
   // c* = 1 (SPEC §4.7.4). Reported only; not used in the CdA. Can be slightly negative when
   // the wheel rolled marginally under the datum (rollout/measurement noise).
+  //
+  // Lap 1's start boundary is t0, which for a missingStart race is extrapolated backward
+  // past the timeline's first real sample (interpAt would clamp there, understating how far
+  // back the true start line was and badly distorting lap 1's raw distance). Use the
+  // already-correct triangular-extrapolated d0 for that one boundary instead.
   const lineHeightsM: number[] = []
   for (let ln = 0; ln < N_LAPS; ln++) {
-    const rawLap =
-      interpAt(t, d, lapBoundaryTimes[ln + 1]) - interpAt(t, d, lapBoundaryTimes[ln])
-    lineHeightsM.push((rawLap - LAP_M) / (2 * Math.PI))
+    const dAtStart = ln === 0 ? d0 : interpAt(t, d, lapBoundaryTimes[ln])
+    const dAtEnd = interpAt(t, d, lapBoundaryTimes[ln + 1])
+    lineHeightsM.push((dAtEnd - dAtStart - LAP_M) / (2 * Math.PI))
   }
   const avgLineHeightM = lineHeightsM.reduce((a, b) => a + b, 0) / lineHeightsM.length
 
@@ -98,4 +103,38 @@ export function lapSampleGroups(
     groups.push(samples)
   }
   return groups
+}
+
+/** A Sample plus its cumulative calibrated (datum) distance from the race start, m. */
+export interface DistancedSample {
+  sample: Sample
+  distCumM: number
+}
+
+/**
+ * Flat, time-ordered Sample series across the whole constructed race (lap 1 → lap 16),
+ * each paired with its cumulative datum distance from the start line. Used for analyses
+ * that need a continuous distance axis rather than per-lap grouping — e.g. rolling CdA
+ * (§4.9 `cdaRolling`) and the speed-vs-position overlay.
+ */
+export function raceSampleSeries(tl: Timeline, laps: LapConstruction, track: TrackModel): DistancedSample[] {
+  const { t, v, p, d } = tl
+  const c = laps.calibrationInterior
+  const d0 = laps.d0
+  const L = track.lapLengthM
+  const a = laps.lapBoundaryTimes[0]
+  const b = laps.lapBoundaryTimes[N_LAPS]
+  if (Number.isNaN(a) || Number.isNaN(b)) return []
+
+  const out: DistancedSample[] = []
+  for (let tt = Math.ceil(a); tt < b; tt++) {
+    const vWheel = interpAt(t, v, tt)
+    const distCumM = c * (interpAt(t, d, tt) - d0)
+    const sInLap = ((distCumM % L) + L) % L
+    out.push({
+      sample: { dt: 1, powerW: interpAt(t, p, tt), vCom: c * vWheel, s: sInLap },
+      distCumM,
+    })
+  }
+  return out
 }
