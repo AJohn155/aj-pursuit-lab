@@ -1,16 +1,22 @@
 @import "tailwindcss";
 
-/* 2026-07 visual refresh (owner request item 3): quiet gradient canvas, soft elevation on
-   cards, tighter display type. Kept as a few global rules so every page benefits without
-   touching each component's class list. */
+/* 2026-07 light-mode redesign (owner-supplied Dribbble reference): off-white canvas,
+   white cards with soft elevation, blue→violet gradient for primary actions and the
+   active nav pill, Space Grotesk type. Kept as global rules + theme tokens so every page
+   benefits without touching each component's class list. Light mode only by owner choice. */
+
+@theme {
+  --font-sans: 'Space Grotesk Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
 
 :root {
   color-scheme: light;
+  /* The reference's signature accent: cyan-blue → violet. */
+  --grad-primary: linear-gradient(92deg, #38bdf8 0%, #7c3aed 100%);
 }
 
 body {
-  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 60%, #e8edf5 100%);
-  background-attachment: fixed;
+  background: #eef0f5;
   color: #0f172a;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -20,10 +26,27 @@ h1 {
   letter-spacing: -0.02em;
 }
 
-/* Soft elevation for every card-style section without editing each component. */
+/* Soft elevation + slightly cooler border for every card-style section, centrally. */
 main section.rounded-xl,
 main div.rounded-xl.border {
+  border-color: #e6e9f0;
   box-shadow:
     0 1px 2px rgb(15 23 42 / 0.04),
-    0 6px 16px rgb(15 23 42 / 0.05);
+    0 8px 20px rgb(15 23 42 / 0.05);
+}
+
+/* Primary actions: every dark (slate-900) button becomes the reference's gradient pill.
+   One central rule instead of editing ~20 call sites; the disabled state drops the
+   gradient so Tailwind's disabled:bg-* classes show through. */
+main button.bg-slate-900,
+main a.bg-slate-900 {
+  background-image: var(--grad-primary);
+  border-radius: 9999px;
+}
+main button.bg-slate-900:hover,
+main a.bg-slate-900:hover {
+  filter: brightness(1.07);
+}
+main button.bg-slate-900:disabled {
+  background-image: none;
 }

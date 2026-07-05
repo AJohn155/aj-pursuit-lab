@@ -50,7 +50,7 @@ export default function Traces({
                   mode: 'lines' as const,
                   x,
                   y: v,
-                  line: { color: '#2563eb', width: 1.5 },
+                  line: { color: '#7c3aed', width: 1.5 },
                   name: 'Speed (m/s)',
                 },
               ]
@@ -63,7 +63,7 @@ export default function Traces({
                   x,
                   y: p,
                   yaxis: 'y2',
-                  line: { color: '#dc2626', width: 1 },
+                  line: { color: '#f43f5e', width: 1 },
                   name: 'Power (W)',
                 },
               ]
@@ -76,7 +76,7 @@ export default function Traces({
                   x,
                   y: cad,
                   yaxis: 'y3',
-                  line: { color: '#16a34a', width: 1 },
+                  line: { color: '#10b981', width: 1 },
                   name: 'Cadence (rpm)',
                 },
               ]
@@ -94,12 +94,12 @@ export default function Traces({
             spikedash: 'solid',
             spikecolor: '#94a3b8',
           },
-          yaxis: { title: { text: 'm/s' }, tickfont: { color: '#2563eb' } },
+          yaxis: { title: { text: 'm/s' }, tickfont: { color: '#7c3aed' } },
           yaxis2: {
             overlaying: 'y',
             side: 'right',
             showgrid: false,
-            tickfont: { color: '#dc2626' },
+            tickfont: { color: '#f43f5e' },
           },
           yaxis3: {
             overlaying: 'y',
@@ -107,7 +107,7 @@ export default function Traces({
             anchor: 'free',
             position: 0.97,
             showgrid: false,
-            tickfont: { color: '#16a34a' },
+            tickfont: { color: '#10b981' },
           },
           margin: { l: 48, r: 8, t: 24, b: 40 },
         }}

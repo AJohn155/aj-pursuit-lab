@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
+import ajMark from '../assets/aj-mark.png'
 
 const TABS = [
   { to: '/rides', label: 'Rides' },
@@ -15,32 +16,52 @@ const TABS = [
 
 const linkClasses = ({ isActive }: { isActive: boolean }) =>
   [
-    'block rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-    isActive
-      ? 'bg-blue-600/90 text-white shadow-sm'
-      : 'text-slate-300 hover:bg-white/10 hover:text-white',
+    'block rounded-full px-4 py-2 text-sm font-medium transition-colors',
+    isActive ? 'text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
   ].join(' ')
+
+const activePillStyle = { backgroundImage: 'var(--grad-primary)' }
 
 const mobileLinkClasses = ({ isActive }: { isActive: boolean }) =>
   [
     'flex min-w-16 flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium transition-colors',
-    isActive ? 'text-blue-600' : 'text-slate-500',
+    isActive ? 'text-violet-600' : 'text-slate-500',
   ].join(' ')
+
+/** The owner's AJ monogram, gradient-tinted via CSS mask (source mark is solid; the mask
+ * carries the shape, the background carries the reference's blue→violet gradient). */
+function AjMark({ className }: { className: string }) {
+  return (
+    <span
+      aria-hidden
+      className={className}
+      style={{
+        backgroundImage: 'var(--grad-primary)',
+        WebkitMaskImage: `url(${ajMark})`,
+        maskImage: `url(${ajMark})`,
+        WebkitMaskRepeat: 'no-repeat',
+        maskRepeat: 'no-repeat',
+        WebkitMaskSize: 'contain',
+        maskSize: 'contain',
+        WebkitMaskPosition: 'center',
+        maskPosition: 'center',
+      }}
+    />
+  )
+}
 
 export default function TabShell() {
   return (
     <div className="flex min-h-svh flex-col md:flex-row">
-      <nav className="hidden w-56 shrink-0 bg-slate-900 p-4 md:block">
-        <div className="mb-6 flex items-center gap-2 px-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">
-            AJ
-          </span>
-          <span className="text-base font-semibold tracking-tight text-white">Pursuit Lab</span>
+      <nav className="hidden w-56 shrink-0 border-r border-slate-200/80 bg-white p-4 md:block">
+        <div className="mb-6 flex items-center gap-2.5 px-2 pt-1">
+          <AjMark className="block h-7 w-10" />
+          <span className="text-base font-semibold tracking-tight text-slate-900">Pursuit Lab</span>
         </div>
         <ul className="space-y-1">
           {TABS.map((tab) => (
             <li key={tab.to}>
-              <NavLink to={tab.to} className={linkClasses}>
+              <NavLink to={tab.to} className={linkClasses} style={({ isActive }) => (isActive ? activePillStyle : undefined)}>
                 {tab.label}
               </NavLink>
             </li>

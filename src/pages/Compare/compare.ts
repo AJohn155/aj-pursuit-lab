@@ -5,8 +5,9 @@
 import type { FullRideAnalysis, LapPositionSeries } from '../../engine/ingest'
 import { interpAt } from '../../engine/ingest'
 
-/** Distinct line colors, cycled if more rides are selected than colors. */
-export const COMPARE_COLORS = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#7c3aed', '#0891b2', '#db2777', '#65a30d']
+/** Distinct line colors, cycled if more rides are selected than colors — re-tuned to the
+ * 2026-07 reference palette (violet/cyan/mint family first) while staying tellable apart. */
+export const COMPARE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#6366f1', '#84cc16']
 
 export function colorFor(index: number): string {
   return COMPARE_COLORS[index % COMPARE_COLORS.length]

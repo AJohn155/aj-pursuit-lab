@@ -409,3 +409,23 @@ Owner supplied a 19-item backlog plus his "IP Data .xlsx" workbook. Everything b
 **Deviations from SPEC (explicit, §9):** rolling-CdA window 1 lap → 2 laps (owner-requested, display-only); `Scenario.overrides.startLapS` added beyond §3.4; §5.8 time-adjuster's "full sim mode" toggle removed (owner-requested); §4.8 geometry fit now constrains template amplitude > 0 (bug fix — the free-sign fit could return phase flipped by half a period). `ENGINE_VERSION` not bumped: no persisted `AnalysisResult` numbers change (geometry/rolling/overlay are display-path only; `peakSpeedPhaseDeg` uses its own full-race profile argmax, not the fit).
 
 **Known limits, on the record:** the start-split model treats lap 1 as pure input (no within-lap-1 dynamics; ghost gap charts draw a nominal straight line across lap 1); overlay phase alignment is only as good as each ride's §4.8 fit (~±6 m bins); §4.7.3 oscillation anchoring remains the real fix for line height and would tighten everything here.
+
+---
+
+## 2026-07-05 — Light-mode redesign (owner-supplied reference)
+
+**Model:** Claude (Fable 5), via Claude Code CLI
+
+Owner asked for a redesign taking the light-mode version of a Dribbble reference (Visenor's "SaaS Analytics Dashboard UI for AI Platform", shot 27264674) and his AJ monogram from andersjohnsonusa.com. Owner's choices via Q&A up front: Space Grotesk type, gradient-tinted logo mark, hybrid chart palette (reference colors for chrome/single-series, distinct per-ride colors kept in Compare), light mode only.
+
+**What changed:**
+- **Type:** `@fontsource-variable/space-grotesk` (self-hosted, offline-safe), set as the Tailwind v4 `--font-sans` token and threaded into Plotly's chart font.
+- **Logo:** the owner's black AJ monogram (pulled from his site, white background converted to alpha, trimmed, 256 px) lives at `src/assets/aj-mark.png`; the sidebar renders it via CSS mask with the reference's cyan→violet gradient (`--grad-primary`), next to a "Pursuit Lab" wordmark.
+- **Shell:** white sidebar with rounded-full nav items; active item is a gradient pill; off-white `#eef0f5` canvas; mobile bottom bar active state violet.
+- **Primary buttons:** one central CSS rule turns every `bg-slate-900` action into the gradient pill (disabled states drop the gradient so Tailwind's disabled classes show through) — no per-callsite edits.
+- **Cards:** cooler border + soft elevation, centrally.
+- **Charts (hybrid per owner):** wrapper gets the reference colorway (violet/cyan/mint first), quiet gridlines, and per-axis deep-merge so page-level axis settings no longer wipe theme defaults; Traces = violet/rose/mint; per-lap CdA bars violet, trend pink; W′bal cyan with soft fill; `COMPARE_COLORS` re-tuned to the palette but still 8 distinct hues.
+
+**Test status:** `npm test` 218/218; `tsc -b`, `npm run build`, `npm run lint` all clean. Live-verified in the browser at 1280 px and 375 px (fresh mobile load confirms charts fit; the reference look confirmed by screenshot against the shot). Zero console errors.
+
+**Notes:** light only by owner choice — no dark mode and no CSS-variable indirection for a future one (owner explicitly picked "light only" over "dark-ready"). The shot's decorative elements (glassmorphism glows, upgrade card, AI copy) were deliberately not imitated; this pass takes its palette, surfaces, and component shapes.

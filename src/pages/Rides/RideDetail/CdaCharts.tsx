@@ -37,7 +37,7 @@ export default function CdaCharts({ laps, rolling }: { laps: LapResult[]; rollin
         <Chart
           ariaLabel="CdA per lap with a drift trendline over the steady window, axis scaled to the steady spread"
           data={[
-            { type: 'bar', x: lapNumbers, y: cdaValues, marker: { color: '#2563eb' }, name: 'CdA' },
+            { type: 'bar', x: lapNumbers, y: cdaValues, marker: { color: '#8b5cf6' }, name: 'CdA' },
             ...(trend
               ? [
                   {
@@ -48,7 +48,7 @@ export default function CdaCharts({ laps, rolling }: { laps: LapResult[]; rollin
                       trend.intercept + trend.slope * STEADY_FIRST_LAP,
                       trend.intercept + trend.slope * (lapNumbers.at(-1) ?? STEADY_FIRST_LAP),
                     ],
-                    line: { color: '#dc2626', dash: 'dash' as const },
+                    line: { color: '#ec4899', dash: 'dash' as const },
                     name: 'Trend (laps 3+)',
                   },
                 ]

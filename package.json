@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fontsource-variable/space-grotesk": "^5.2.10",
     "dexie": "^4.4.4",
     "firebase": "^12.15.0",
     "fit-file-parser": "^3.0.2",

@@ -15,9 +15,10 @@ export default function WBalChart({ curve }: { curve: WBalPoint[] }) {
             mode: 'lines',
             x: curve.map((p) => p.tS),
             y: curve.map((p) => p.wBalJ / 1000),
-            line: { color: '#0891b2' },
+            line: { color: '#0ea5e9' },
             name: "W'bal",
             fill: 'tozeroy',
+            fillcolor: 'rgba(14, 165, 233, 0.08)',
           },
         ]}
         layout={{
