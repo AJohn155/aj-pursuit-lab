@@ -62,6 +62,10 @@ export function buildRideRecordStats(
 
   const lapTimes = laps.map((l) => l.timeS).filter((t) => Number.isFinite(t))
 
+  // The cumulative 1k/2k/3k marks equate N laps with a round distance (4 laps = 1 km),
+  // which only holds on a 250 m track — same datum assumption as the half-lap guard above.
+  const is250mTrack = venue.lapLengthM === LAP_M
+
   return {
     ride,
     venue,
@@ -69,9 +73,9 @@ export function buildRideRecordStats(
     fastestLapS: lapTimes.length > 0 ? Math.min(...lapTimes) : null,
     fastestHalfLapS,
     firstLapS: laps.length > 0 && Number.isFinite(laps[0].timeS) ? laps[0].timeS : null,
-    cum1kS: cumulativeTimeAtLap(laps, N_LAPS / 4),
-    cum2kS: cumulativeTimeAtLap(laps, N_LAPS / 2),
-    cum3kS: cumulativeTimeAtLap(laps, (3 * N_LAPS) / 4),
+    cum1kS: is250mTrack ? cumulativeTimeAtLap(laps, N_LAPS / 4) : null,
+    cum2kS: is250mTrack ? cumulativeTimeAtLap(laps, N_LAPS / 2) : null,
+    cum3kS: is250mTrack ? cumulativeTimeAtLap(laps, (3 * N_LAPS) / 4) : null,
     cdaRace: analysis && Number.isFinite(analysis.cdaRace) ? analysis.cdaRace : null,
     avgLineHeightM:
       laps.length > 0

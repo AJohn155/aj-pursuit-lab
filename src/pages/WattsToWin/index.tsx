@@ -26,6 +26,8 @@ export default function WattsToWin() {
   }
 
   async function handleDelete(id: string) {
+    const target = events.find((e) => e.id === id)
+    if (!window.confirm(`Delete event “${target?.name || 'Untitled'}” and its winners list? This can't be undone.`)) return
     await dataStore.events.delete(id)
     if (selectedEventId === id) setSelectedEventId(null)
   }

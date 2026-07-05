@@ -183,6 +183,8 @@ export default function Adjuster() {
   }
 
   async function handleDelete(id: string) {
+    const target = scenarios.find((s) => s.id === id)
+    if (!window.confirm(`Delete scenario “${target?.name || 'Untitled'}”? This can't be undone.`)) return
     await dataStore.scenarios.delete(id)
     if (editingId === id) handleNewScenario()
   }
