@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Local Claude Code settings — contains machine-local permission grants and must
+# never be committed (this repo is public)
+.claude/settings.local.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
