@@ -7,18 +7,32 @@ import { useMemo, useState } from 'react'
 import { dataStore } from '../../store/DataStore'
 import type { Ride } from '../../store/types'
 import { useCollection } from '../../store/useCollection'
-import { csvToRecords, parseCsv, parseGear, parseTimeToSeconds } from './csv'
+import { csvToRecords, detectOwnerSheet, matchVenueName, normalizeDateString, parseCsv, parseGear, parseTimeToSeconds } from './csv'
 
 const NONE = ''
 
 interface Mapping {
+  event: string
   date: string
   venue: string
+  airDensity: string
   gear: string
   finishTime: string
   avgPower: string
   notes: string
   lapSplitCols: string[]
+}
+
+const EMPTY_MAPPING: Mapping = {
+  event: NONE,
+  date: NONE,
+  venue: NONE,
+  airDensity: NONE,
+  gear: NONE,
+  finishTime: NONE,
+  avgPower: NONE,
+  notes: NONE,
+  lapSplitCols: [],
 }
 
 function newRideId(): string {
@@ -29,15 +43,8 @@ export default function CsvImport() {
   const venues = useCollection(dataStore.venues)
   const [csvText, setCsvText] = useState('')
   const [parsed, setParsed] = useState<{ headers: string[]; records: Record<string, string>[] } | null>(null)
-  const [mapping, setMapping] = useState<Mapping>({
-    date: NONE,
-    venue: NONE,
-    gear: NONE,
-    finishTime: NONE,
-    avgPower: NONE,
-    notes: NONE,
-    lapSplitCols: [],
-  })
+  const [mapping, setMapping] = useState<Mapping>(EMPTY_MAPPING)
+  const [autoDetected, setAutoDetected] = useState(false)
   const [summary, setSummary] = useState<{ created: number; skipped: { row: number; reason: string }[] } | null>(
     null,
   )
@@ -46,7 +53,25 @@ export default function CsvImport() {
     setSummary(null)
     const { headers, records } = csvToRecords(parseCsv(csvText))
     setParsed({ headers, records })
-    setMapping({ date: NONE, venue: NONE, gear: NONE, finishTime: NONE, avgPower: NONE, notes: NONE, lapSplitCols: [] })
+    // Owner-sheet layout (Event/Date/Location/…/Lap 1..16/Comments) is recognized and the
+    // whole mapping prefilled — pasting straight from the history sheet needs zero clicks.
+    const owner = detectOwnerSheet(headers)
+    setAutoDetected(owner != null)
+    setMapping(
+      owner
+        ? {
+            event: owner.event,
+            date: owner.date,
+            venue: owner.location,
+            airDensity: owner.airDensity,
+            gear: owner.gearing,
+            finishTime: owner.overallTime,
+            avgPower: owner.avgPower,
+            notes: owner.notes,
+            lapSplitCols: owner.lapCols,
+          }
+        : EMPTY_MAPPING,
+    )
   }
 
   async function handleFile(file: File) {
@@ -62,15 +87,17 @@ export default function CsvImport() {
   }
 
   function buildRide(record: Record<string, string>, rowIndex: number): { ride: Ride } | { error: string } {
-    const dateVal = mapping.date ? record[mapping.date]?.trim() : ''
-    if (!dateVal) return { error: `row ${rowIndex}: missing date` }
+    const dateRaw = mapping.date ? record[mapping.date]?.trim() : ''
+    if (!dateRaw) return { error: `row ${rowIndex}: missing date` }
+    const dateVal = normalizeDateString(dateRaw)
+    if (!dateVal) return { error: `row ${rowIndex}: unrecognized date "${dateRaw}"` }
 
     const finishRaw = mapping.finishTime ? record[mapping.finishTime] : ''
     const officialTimeS = finishRaw ? parseTimeToSeconds(finishRaw) : null
     if (officialTimeS == null) return { error: `row ${rowIndex}: unparseable finish time "${finishRaw}"` }
 
     const venueName = mapping.venue ? record[mapping.venue]?.trim() : ''
-    const venue = venueName ? venues.find((v) => v.name.toLowerCase() === venueName.toLowerCase()) : undefined
+    const venue = venueName ? matchVenueName(venueName, venues) : undefined
     if (venueName && !venue) return { error: `row ${rowIndex}: venue "${venueName}" not found` }
     if (!venue) return { error: `row ${rowIndex}: no venue mapped or matched` }
 
@@ -82,6 +109,7 @@ export default function CsvImport() {
       .filter((v): v is number => v != null)
 
     const avgPowerRaw = mapping.avgPower ? Number.parseFloat(record[mapping.avgPower] ?? '') : Number.NaN
+    const airDensityRaw = mapping.airDensity ? Number.parseFloat(record[mapping.airDensity] ?? '') : Number.NaN
 
     const now = new Date().toISOString()
     const ride: Ride = {
@@ -90,11 +118,12 @@ export default function CsvImport() {
       updatedAt: now,
       date: dateVal,
       venueId: venue.id,
-      eventName: '',
+      eventName: mapping.event ? (record[mapping.event]?.trim() ?? '') : '',
       round: 'other',
       officialTimeS,
       officialSplits,
       gear,
+      airDensity: Number.isFinite(airDensityRaw) && airDensityRaw > 0 ? airDensityRaw : undefined,
       systemMassKg: 100,
       manualAvgPowerW: Number.isFinite(avgPowerRaw) ? avgPowerRaw : undefined,
       kit: [],
@@ -168,11 +197,20 @@ export default function CsvImport() {
 
       {parsed && (
         <div className="space-y-4">
+          {autoDetected && (
+            <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+              Recognized the IP history sheet layout — every column below was mapped automatically
+              (Event, Date, Location, Air density, Gearing, Overall time, Lap 1–16, Comments). Adjust
+              anything that looks off, then import.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {(
               [
+                ['event', 'Event'],
                 ['date', 'Date'],
-                ['venue', 'Venue'],
+                ['venue', 'Venue / location'],
+                ['airDensity', 'Air density'],
                 ['gear', 'Gear'],
                 ['finishTime', 'Finish time'],
                 ['avgPower', 'Avg power'],

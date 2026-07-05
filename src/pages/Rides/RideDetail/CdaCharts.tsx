@@ -1,6 +1,10 @@
 // Per-lap CdA with drift trendline, and rolling CdA (SPEC §5.1 / §4.9). The trendline is
 // fit over the steady window (laps 3+) — the standing-start laps' CdA is not physically
 // meaningful (see cda.ts) and would otherwise dominate the fit.
+//
+// Owner request 2026-07: the per-lap axis is scaled to the steady laps' spread (not down
+// to 0) so bar-height granularity is visible; standing-start laps whose CdA falls outside
+// that band clip at the edge by design.
 
 import type { LapResult } from '../../../engine/ingest'
 import type { RollingCdaPoint } from '../../../engine/index'
@@ -19,12 +23,19 @@ export default function CdaCharts({ laps, rolling }: { laps: LapResult[]; rollin
   const trend =
     steadyIdx.length >= 2 ? linearTrend(steadyIdx.map((p) => p.n), steadyIdx.map((p) => p.cda)) : null
 
+  // Y-range from the steady laps only, padded — lap 1–2 values are dominated by the
+  // standing-start energy imbalance and would otherwise flatten the interesting spread.
+  const steadyVals = steadyIdx.map((p) => p.cda)
+  const lo = steadyVals.length > 0 ? Math.min(...steadyVals) : 0.15
+  const hi = steadyVals.length > 0 ? Math.max(...steadyVals) : 0.25
+  const pad = Math.max(0.004, (hi - lo) * 0.25)
+
   return (
     <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
       <div>
         <h2 className="text-sm font-semibold text-slate-900">Per-lap CdA</h2>
         <Chart
-          ariaLabel="CdA per lap with a drift trendline over the steady window"
+          ariaLabel="CdA per lap with a drift trendline over the steady window, axis scaled to the steady spread"
           data={[
             { type: 'bar', x: lapNumbers, y: cdaValues, marker: { color: '#2563eb' }, name: 'CdA' },
             ...(trend
@@ -43,14 +54,22 @@ export default function CdaCharts({ laps, rolling }: { laps: LapResult[]; rollin
                 ]
               : []),
           ]}
-          layout={{ xaxis: { title: { text: 'Lap' } }, yaxis: { title: { text: 'm²' } } }}
+          layout={{
+            xaxis: { title: { text: 'Lap' } },
+            yaxis: { title: { text: 'm²' }, range: [lo - pad, hi + pad] },
+          }}
           height={260}
         />
+        <p className="mt-1 text-xs text-slate-400">
+          Axis is scaled to the steady laps (3+); laps 1–2 usually clip — their single-lap energy
+          balance is dominated by the standing start and isn&apos;t a real CdA. The headline CdA uses
+          laps 3–16 only.
+        </p>
       </div>
       <div>
-        <h2 className="text-sm font-semibold text-slate-900">Rolling CdA (display only)</h2>
+        <h2 className="text-sm font-semibold text-slate-900">Rolling CdA (2-lap window)</h2>
         <Chart
-          ariaLabel="Rolling CdA over a centered 1-lap window stepped a quarter lap at a time"
+          ariaLabel="Rolling CdA over a centered 2-lap window stepped a quarter lap at a time"
           data={[
             {
               type: 'scatter',
@@ -64,6 +83,12 @@ export default function CdaCharts({ laps, rolling }: { laps: LapResult[]; rollin
           layout={{ xaxis: { title: { text: 'Distance (m)' } }, yaxis: { title: { text: 'm²' } } }}
           height={220}
         />
+        <p className="mt-1 text-xs text-slate-400">
+          The same energy-balance CdA computed over a sliding 2-lap window (stepped ¼ lap) — a
+          within-race drift diagnostic, not a separate estimate. Single-window noise is large because
+          the aero term is small relative to the KE swing inside a short window; the headline CdA
+          (laps 3–16 in one balance) is the number to trust.
+        </p>
       </div>
     </section>
   )

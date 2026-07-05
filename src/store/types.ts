@@ -130,6 +130,10 @@ export interface Scenario extends Persisted {
     airDensity?: number
     venueId?: string
     gear?: { chainring: number; cog: number }
+    // Owner extension to §3.4 (2026-07 item 12): when set alongside avgPowerW, the
+    // scenario uses the start-split model — lap 1 takes exactly startLapS, and the sim
+    // covers the remaining laps at flat avgPowerW starting from the settle speed.
+    startLapS?: number
   }
   result?: { predictedTimeS: number; lapSplits: number[]; note: string }
   pinned: boolean

@@ -125,11 +125,35 @@ describe('ghostDistanceTimeSeries (SPEC §5.6 overlay vs any ride)', () => {
       mechEfficiency: 0.98,
       comHeightM: 1.1,
     }
-    const { sim } = solveGhostSchedule('even', 245, { cdaM2: 0.19, rho: 1.15, params, track })
-    const series = ghostDistanceTimeSeries(sim)
+    const schedule = solveGhostSchedule('even', 245, { cdaM2: 0.19, rho: 1.15, params, track })
+    const series = ghostDistanceTimeSeries(schedule)
     expect(series.distM[series.distM.length - 1]).toBeGreaterThan(3950)
     for (let i = 1; i < series.distM.length; i++) {
       expect(series.distM[i]).toBeGreaterThanOrEqual(series.distM[i - 1])
+    }
+  })
+
+  it('startSplit ghost: lap 1 = entered split, series covers the full 4000 m (2026-07 item 12)', () => {
+    const track = makeTrack(250, 23)
+    const params: RiderParams = {
+      massKg: 100,
+      rotatingMassEqKg: 1.0,
+      crrEff: effectiveCrr(0.0014, 1.0),
+      mechEfficiency: 0.98,
+      comHeightM: 1.1,
+    }
+    const schedule = solveGhostSchedule('startSplit', 245, { cdaM2: 0.19, rho: 1.15, params, track }, undefined, 21.5)
+    expect(schedule.lapTimes[0]).toBe(21.5)
+    expect(schedule.lapTimes).toHaveLength(16)
+    expect(schedule.predictedTimeS).toBeCloseTo(245, 1)
+    const series = ghostDistanceTimeSeries(schedule)
+    expect(series.distM[0]).toBe(0)
+    expect(series.distM[series.distM.length - 1]).toBeGreaterThan(3950 - 250)
+    for (let i = 1; i < series.distM.length; i++) {
+      expect(series.distM[i]).toBeGreaterThanOrEqual(series.distM[i - 1])
+    }
+    for (let i = 1; i < series.elapsedS.length; i++) {
+      expect(series.elapsedS[i]).toBeGreaterThan(series.elapsedS[i - 1])
     }
   })
 })

@@ -31,6 +31,7 @@ const baseInputs = {
   comHeightM: 1.1,
   rolloutM: 2.09,
   gear: { chainring: 65, cog: 15 },
+  start: { kind: 'template' } as const,
 }
 
 describe('computeRaceDayPlan (SPEC §5.7)', () => {
@@ -47,6 +48,20 @@ describe('computeRaceDayPlan (SPEC §5.7)', () => {
     expect(plan.steadyW).toBe(480)
     expect(plan.predictedTimeS).toBeGreaterThan(200)
     expect(plan.predictedTimeS).toBeLessThan(300)
+  })
+
+  it('start-split mode: lap 1 is exactly the entered split; goal-time solve hits target (2026-07 item 12)', () => {
+    const plan = computeRaceDayPlan({
+      ...baseInputs,
+      goal: { kind: 'time', targetTimeS: 245 },
+      start: { kind: 'split', startLapS: 21.5 },
+    })
+    expect(plan.lapTimes[0]).toBe(21.5)
+    expect(plan.predictedTimeS).toBeCloseTo(245, 1)
+    expect(plan.lapTimes).toHaveLength(16)
+    // Laps 2+ are near-even (ridden at settle speed).
+    const rest = plan.lapTimes.slice(1)
+    expect(Math.max(...rest) - Math.min(...rest)).toBeLessThan(0.2)
   })
 
   it('cadence scales inversely with lap time for a fixed gear', () => {

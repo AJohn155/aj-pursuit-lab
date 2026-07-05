@@ -7,11 +7,13 @@ import { SETTINGS_ID, withSettingsDefaults } from '../../store/types'
 import { useCollection } from '../../store/useCollection'
 import CadenceCalculator from './CadenceCalculator'
 import PowerForSpeedCalculator from './PowerForSpeedCalculator'
+import ScheduleBuilderCalculator from './ScheduleBuilderCalculator'
 import TimeAdjusterCalculator from './TimeAdjusterCalculator'
 import WattsSavedCalculator from './WattsSavedCalculator'
 
 const TABS = [
   { key: 'cadence', label: 'Cadence' },
+  { key: 'schedule', label: 'Schedule builder' },
   { key: 'power-for-speed', label: 'Power for speed' },
   { key: 'watts-saved', label: 'Watts saved' },
   { key: 'time-adjuster', label: 'Time adjuster' },
@@ -20,7 +22,6 @@ const TABS = [
 type TabKey = (typeof TABS)[number]['key']
 
 export default function Calculators() {
-  const rides = useCollection(dataStore.rides)
   const venues = useCollection(dataStore.venues)
   const settingsRows = useCollection(dataStore.settings)
   const rawSettings = settingsRows.find((s) => s.id === SETTINGS_ID)
@@ -59,9 +60,10 @@ export default function Calculators() {
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         {tab === 'cadence' && <CadenceCalculator settings={settings} venues={venues} />}
+        {tab === 'schedule' && <ScheduleBuilderCalculator />}
         {tab === 'power-for-speed' && <PowerForSpeedCalculator settings={settings} venues={venues} />}
         {tab === 'watts-saved' && <WattsSavedCalculator settings={settings} />}
-        {tab === 'time-adjuster' && <TimeAdjusterCalculator rides={rides} venues={venues} settings={settings} />}
+        {tab === 'time-adjuster' && <TimeAdjusterCalculator />}
       </div>
     </div>
   )

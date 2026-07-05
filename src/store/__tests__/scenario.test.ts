@@ -182,3 +182,29 @@ describe('scenarioToFullAnalysis — Compare adapter', () => {
     expect(resolved.headStartS).toBeGreaterThan(0)
   })
 })
+
+describe('startLapS override — start-split model (owner item 12, 2026-07)', () => {
+  it("a blank baseline with avgPowerW+startLapS matches the engine's startSplitPlan exactly", async () => {
+    const { startSplitPlan } = await import('../../engine/startsplit')
+    const { makeTrack } = await import('../../engine/track')
+    const resolved = resolveScenario('blank', { avgPowerW: 480, startLapS: 21.5, cdA: 0.19 }, settings, [venue])
+    expect(resolved.headStartS).toBe(21.5)
+    expect(resolved.distanceM).toBe(3750)
+    expect(resolved.lapPhaseOffsetM).toBe(250)
+
+    const run = runScenario(resolved)
+    expect(run.lapTimes).toHaveLength(16)
+    expect(run.lapTimes[0]).toBeCloseTo(21.5, 3)
+
+    const plan = startSplitPlan(21.5, 480, {
+      cdaM2: 0.19,
+      rho: resolved.rho,
+      params: resolved.params,
+      track: makeTrack(venue.lapLengthM, venue.bendRadiusM),
+    })
+    expect(run.predictedTimeS).toBeCloseTo(plan.predictedTimeS, 3)
+    // Laps 2+ near-even (started at settle speed).
+    const rest = run.lapTimes.slice(1)
+    expect(Math.max(...rest) - Math.min(...rest)).toBeLessThan(0.2)
+  })
+})

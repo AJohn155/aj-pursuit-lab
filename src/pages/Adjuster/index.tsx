@@ -29,6 +29,7 @@ const DEFAULT_STATE: OverrideFormState = {
   powerMode: 'schedule',
   powerScalePct: '100',
   constantPowerInput: '450',
+  startLapInput: '21.5',
 }
 
 function buildOverrides(state: OverrideFormState): Scenario['overrides'] {
@@ -40,7 +41,11 @@ function buildOverrides(state: OverrideFormState): Scenario['overrides'] {
   if (state.venueOverride) o.venueId = state.venueOverride
   o.gear = { chainring: state.chainring, cog: state.cog }
   const isBlank = state.baselineRef === 'blank'
-  if (isBlank || state.powerMode === 'constant') {
+  if (state.powerMode === 'startSplit') {
+    if (state.constantPowerInput !== '') o.avgPowerW = Number(state.constantPowerInput)
+    const startLap = Number(state.startLapInput)
+    if (state.startLapInput !== '' && Number.isFinite(startLap) && startLap > 0) o.startLapS = startLap
+  } else if (isBlank || state.powerMode === 'constant') {
     if (state.constantPowerInput !== '') o.avgPowerW = Number(state.constantPowerInput)
   } else if (state.powerScalePct !== '' && state.powerScalePct !== '100') {
     o.powerScale = Number(state.powerScalePct) / 100
@@ -55,7 +60,9 @@ function describeOverrides(overrides: Scenario['overrides'], baselineSnapshot: R
   if (overrides.massKg != null) parts.push(`mass ${overrides.massKg.toFixed(1)} kg`)
   if (overrides.airDensity != null) parts.push(`ρ ${overrides.airDensity.toFixed(4)}`)
   if (overrides.venueId) parts.push(`venue: ${overrides.venueId}`)
-  if (overrides.avgPowerW != null) parts.push(`constant ${overrides.avgPowerW.toFixed(0)} W`)
+  if (overrides.avgPowerW != null && overrides.startLapS != null)
+    parts.push(`start ${overrides.startLapS.toFixed(1)} s + settle ${overrides.avgPowerW.toFixed(0)} W`)
+  else if (overrides.avgPowerW != null) parts.push(`constant ${overrides.avgPowerW.toFixed(0)} W`)
   else if (overrides.powerScale != null) parts.push(`power ×${overrides.powerScale.toFixed(2)}`)
   return parts.length > 0 ? parts.join('; ') : 'No overrides (baseline as-is)'
 }
@@ -172,9 +179,15 @@ export default function Adjuster() {
       venueOverride: o.venueId ?? '',
       chainring: o.gear?.chainring ?? 65,
       cog: o.gear?.cog ?? 15,
-      powerMode: !isBlank && o.avgPowerW == null ? 'schedule' : 'constant',
+      powerMode:
+        o.startLapS != null && o.avgPowerW != null
+          ? 'startSplit'
+          : !isBlank && o.avgPowerW == null
+            ? 'schedule'
+            : 'constant',
       powerScalePct: o.powerScale != null ? String(o.powerScale * 100) : '100',
       constantPowerInput: o.avgPowerW != null ? String(o.avgPowerW) : '450',
+      startLapInput: o.startLapS != null ? String(o.startLapS) : '21.5',
     })
     setScenarioName(scenario.name)
     setEditingId(scenario.id)

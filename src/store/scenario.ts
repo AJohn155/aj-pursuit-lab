@@ -8,6 +8,7 @@
 import type { RollingCdaPoint } from '../engine/cda'
 import { cdaRolling } from '../engine/cda'
 import { effectiveCrr } from '../engine/params'
+import { settleSpeedForPower } from '../engine/startsplit'
 import { makeTrack } from '../engine/track'
 import {
   solveCdaForTime,
@@ -207,7 +208,17 @@ export function resolveScenario(
   const gear = overrides.gear ?? baseGear
 
   let power: PowerInput
-  if (overrides.avgPowerW != null) {
+  if (overrides.avgPowerW != null && overrides.startLapS != null) {
+    // Start-split model (owner item 12, 2026-07): lap 1 is exactly the entered split, and
+    // the remaining laps ride at flat avgPowerW starting from the settle speed that power
+    // holds on this track. Reuses the head-start plumbing: headStartS = the start split,
+    // distanceM = the remaining laps, and the lap-phase offset lands the lap-1 line at the
+    // sim's own t=0.
+    power = overrides.avgPowerW
+    headStartS = overrides.startLapS
+    v0 = settleSpeedForPower(overrides.avgPowerW, { cdaM2, rho, params, track })
+    distanceM = RACE_DISTANCE_M - track.lapLengthM
+  } else if (overrides.avgPowerW != null) {
     // A flat constant-power target replaces the real pacing shape entirely — "what if I
     // held a steady N watts" is a genuinely different question from "what if I rode my
     // real race N% harder everywhere". The head start itself is a historical fact about
@@ -520,5 +531,8 @@ export function scenarioToFullAnalysis(
     wBalCurve,
     quality: { score: quality.score, badge: quality.badge, flags: quality.flags },
     analysisResult,
+    // A scenario's positions are exact by construction (simulated on the track model), so
+    // there's no start-datum phase error to correct for — charts skip re-anchoring.
+    geometry: null,
   }
 }

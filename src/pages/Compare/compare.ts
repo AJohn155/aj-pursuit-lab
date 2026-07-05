@@ -103,8 +103,17 @@ export interface SpeedPositionAverage {
  * per-ride overlay) across a steady lap window into position bins, so Compare can show one
  * representative line per ride rather than 16 lines per ride. Binned rather than a raw
  * per-second overlay because different rides' laps don't share position samples.
+ *
+ * `phaseOffsetM` (the ride's fitted §4.8 lap-line phase) re-anchors positions onto track
+ * coordinates (0 = start of a straight) before binning, so different rides' bends line up
+ * with each other despite each ride's own start-datum anchoring error (§4.7.3 gap).
  */
-export function speedPositionAverage(overlay: LapPositionSeries[], lapLengthM: number, lastLap: number): SpeedPositionAverage {
+export function speedPositionAverage(
+  overlay: LapPositionSeries[],
+  lapLengthM: number,
+  lastLap: number,
+  phaseOffsetM = 0,
+): SpeedPositionAverage {
   const firstLap = 3
   const sums = new Array<number>(SPEED_POS_BINS).fill(0)
   const counts = new Array<number>(SPEED_POS_BINS).fill(0)
@@ -112,7 +121,8 @@ export function speedPositionAverage(overlay: LapPositionSeries[], lapLengthM: n
   for (const lap of overlay) {
     if (lap.lap < firstLap || lap.lap > lastLap) continue
     for (let i = 0; i < lap.posM.length; i++) {
-      const bin = Math.min(SPEED_POS_BINS - 1, Math.floor(lap.posM[i] / binWidth))
+      const aligned = (((lap.posM[i] - phaseOffsetM) % lapLengthM) + lapLengthM) % lapLengthM
+      const bin = Math.min(SPEED_POS_BINS - 1, Math.floor(aligned / binWidth))
       sums[bin] += lap.speedMs[i]
       counts[bin]++
     }

@@ -21,6 +21,7 @@ import { SETTINGS_ID } from '../../../store/types'
 import { useCollection } from '../../../store/useCollection'
 import AccelDecelSummary from './AccelDecelSummary'
 import CdaCharts from './CdaCharts'
+import EditRidePanel from './EditRidePanel'
 import LapTable from './LapTable'
 import OverlayChart from './OverlayChart'
 import QualityPanel from './QualityPanel'
@@ -49,6 +50,7 @@ export default function RideDetail() {
   }, [ride, venue, settings])
 
   const [saved, setSaved] = useState(false)
+  const [editing, setEditing] = useState(false)
 
   if (!ride) return <p className="text-sm text-slate-500">Loading ride…</p>
   if (!venue) return <p className="text-sm text-red-700">This ride's venue no longer exists.</p>
@@ -97,6 +99,13 @@ export default function RideDetail() {
               Cached analysis is from an older engine version
             </span>
           )}
+          <button
+            type="button"
+            onClick={() => setEditing((e) => !e)}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            {editing ? 'Close edit' : 'Edit details'}
+          </button>
           <Link
             to={`/calculators?tab=cadence&chainring=${ride.gear.chainring}&cog=${ride.gear.cog}`}
             className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
@@ -113,14 +122,45 @@ export default function RideDetail() {
         </div>
       </div>
 
+      {editing && <EditRidePanel ride={ride} venues={venues} onDone={() => setEditing(false)} />}
+
+      <PowerSummary full={full} />
       <Traces t={full.base.timeline.t} v={full.base.timeline.v} p={full.base.timeline.p} cad={full.base.timeline.cad} t0={full.base.detection.t0} />
       <LapTable laps={full.analysisResult.laps} officialSplits={ride.officialSplits} />
       <CdaCharts laps={full.analysisResult.laps} rolling={full.rolling} />
       <StartPanel startMetrics={full.analysisResult.startMetrics} />
       <WBalChart curve={full.wBalCurve} />
       <AccelDecelSummary accelDecel={full.analysisResult.accelDecel} />
-      <OverlayChart overlay={full.overlay} />
+      <OverlayChart overlay={full.overlay} geometry={full.geometry} lapLengthM={venue.lapLengthM} />
       <QualityPanel score={full.quality.score} badge={full.quality.badge} flags={full.quality.flags} />
     </div>
+  )
+}
+
+/**
+ * Two average-power conventions side by side (owner question 2026-07 item 10): the
+ * whole-duration average counts the SRM's under-read standing start (~0 W for the first
+ * seconds) against the official duration; the recorded-samples average starts at the first
+ * trustworthy power reading — that's the convention SRM/analysis software uses, and the one
+ * that matches the owner's historical spreadsheet numbers.
+ */
+function PowerSummary({ full }: { full: FullRideAnalysis }) {
+  const { timeline, detection, laps } = full.base
+  const t0 = detection.t0
+  const tEnd = laps.lapBoundaryTimes[laps.lapBoundaryTimes.length - 1]
+  const idx = timeline.t.map((_, i) => i).filter((i) => timeline.t[i] >= Math.max(t0, timeline.t[0]) && timeline.t[i] <= tEnd)
+  if (idx.length === 0) return null
+  const sum = idx.reduce((s, i) => s + timeline.p[i], 0)
+  const wholeDuration = sum / (tEnd - t0)
+  let fp = idx[0]
+  while (fp < timeline.p.length - 1 && timeline.p[fp] < 100) fp++
+  const recIdx = idx.filter((i) => i >= fp)
+  const recorded = recIdx.length > 0 ? recIdx.reduce((s, i) => s + timeline.p[i], 0) / recIdx.length : wholeDuration
+  return (
+    <p className="text-sm text-slate-600">
+      Avg power: <span className="font-semibold">{wholeDuration.toFixed(0)} W</span> over the official
+      duration (un-recorded start counts as 0 W) · <span className="font-semibold">{recorded.toFixed(0)} W</span>{' '}
+      over recorded samples (SRM-style — matches head-unit / spreadsheet averages).
+    </p>
   )
 }

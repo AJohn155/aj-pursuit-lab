@@ -1,1 +1,29 @@
 @import "tailwindcss";
+
+/* 2026-07 visual refresh (owner request item 3): quiet gradient canvas, soft elevation on
+   cards, tighter display type. Kept as a few global rules so every page benefits without
+   touching each component's class list. */
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 60%, #e8edf5 100%);
+  background-attachment: fixed;
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1 {
+  letter-spacing: -0.02em;
+}
+
+/* Soft elevation for every card-style section without editing each component. */
+main section.rounded-xl,
+main div.rounded-xl.border {
+  box-shadow:
+    0 1px 2px rgb(15 23 42 / 0.04),
+    0 6px 16px rgb(15 23 42 / 0.05);
+}

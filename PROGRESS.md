@@ -377,3 +377,35 @@ Severity-4 noted, not fixed: (a) a pinned scenario's gap-chart series starts at 
 **Mobile:** no code-level breakage found in the P5–P8 pages (all tables use the established `overflow-x-auto` pattern, forms stack single-column); P8's own documented 375 px live pass covered all 10 tabs, and this session's fix (a native confirm dialog) has no layout surface.
 
 **Test status after fixes:** `npm test` **195/195 passing** (23 files); `npm run build` and `npm run lint` clean. Fixture gate numbers untouched (fixes are UI-guard/record-eligibility only, no physics change).
+
+---
+
+## 2026-07-05 — Owner feedback round 1 (19 items)
+
+**Model:** Claude (Fable 5), via Claude Code CLI
+
+Owner supplied a 19-item backlog plus his "IP Data .xlsx" workbook. Everything below was built, tested, and live-verified in the browser (desktop + narrow mobile width). `npm test` **218/218** (25 files; 23 new tests), `tsc -b`, `npm run build`, `npm run lint` all clean, zero console errors.
+
+**Investigations (items 10/15/19), run as Node probes against the two fixtures:**
+- **(10) Avg-power discrepancy (owner sees 499/503, app showed 487/494):** the app's number time-averages over the full official duration, counting the SRM's under-read standing start as ~0 W; the owner's numbers average recorded samples only. Computed from the fixtures: quali 487.7 W (official-duration) vs **495.3 W** (from first ≥100 W sample); final 496.1 vs **503.6 W** — the final matches the owner's 503 exactly; quali's residual ~4 W is its 3.5 s missing start + in-race dropout interpolation. Ride detail now shows BOTH conventions side by side.
+- **(15) Speed-vs-position phase disagreement between rides:** confirmed real — both rides show the correct two-peaks-per-lap shape but phase-shifted ~30–45 m against each other (start-datum anchoring error, the known §4.7.3 gap). Fixed at display level: every overlay is re-anchored onto track coordinates via the ride's own §4.8 fitted lap-line phase, with the bends shaded. **Found and fixed an engine bug in the process:** `fitVenueGeometry` left the template amplitude sign free, so it could lock onto speed *minima* and return a half-period-flipped phase (the final fixture did exactly that). Now constrained to positive amplitude (wheel speed physically rises in bends). Live-verified: both rides' peaks land inside the same shaded bend (222 m / 209 m), residual ~13 m.
+- **(19) Negative line height on the final:** development (m per crank rev) is identical across both rides (9.0952/9.0939 — same gear + speed-source config, rules out a head-unit change), and the final's distance integrates its speed exactly. The ±0.16 m line heights mirror the opposite-sign gate-2 detection residuals (−1.20 s quali / +1.07 s final): a ~1 s start-anchor error shifts the whole-race calibration ~0.4%, swamping genuine line height. It's a start-anchor artifact, not riding under the black line. Lap table now says so explicitly and reports the total-extra-meters figure with that caveat (item 5). Also noteworthy: implied rollout from v/cadence is ~2.099, not the configured 2.090 — worth checking the SRM's wheel-circumference setting.
+
+**Features/changes:**
+- **(1/11) Owner-sheet paste import:** the CSV wizard now parses tab-separated pastes, auto-recognizes the history-sheet header (Event/Date/Location/Air density/Gearing/Overall time/Lap 1–16/Comments) and prefills the entire mapping; dates auto-normalize (ISO, M/D/YYYY, month-name forms); venue matching is fuzzy ("Santiago" → "Peñalolén (Santiago)"); Event/air-density columns now map onto the ride. Upload flow prefills the date from the .fit file's own first timestamp.
+- **(2) Ride delete** from the rides table, with a confirm dialog.
+- **(16/18) Ride editing:** "Edit details" panel on ride detail (title/date/round/result/venue/kit/notes/official splits); upload metadata form takes pasted lap splits (per-lap or cumulative, auto-detected) so the fit + lap details save together.
+- **(4) Traces:** one overlaid chart (speed/power/cadence, three y-axes) with a unified hover spike line; toggles kept.
+- **(6/14) Chart scaling:** per-lap CdA y-axis scales to the steady laps (start laps clip by design); Compare lap-splits axis no longer runs to 0.
+- **(7) Rolling CdA** widened to a 2-lap window (display-only §4.9 diagnostic; owner-approved deviation) with an explanatory caption.
+- **(9) Speed-vs-position colors:** one light→dark gradient across laps 1→16, plus the bend shading/phase alignment above (same treatment on Compare's overlay).
+- **(12) Start-split + settle-power model** (`engine/startsplit.ts`, owner's spreadsheet convention: "Power excluding lap 1", "up to speed by lap 2"): lap 1 entered directly, remaining laps simulated at flat settle power from the settle speed (bisection-inverted from the §5.8 track power equation). Wired into Race Day (new "Start lap" mode, default), Pacing's ghost builder (new schedule kind, default), and the Adjuster (new power mode; persists via a new optional `Scenario.overrides.startLapS` — an owner extension to §3.4, flagged per §9). Round-trip and consistency tests added at all three layers.
+- **(17) Calculators:** new **Schedule Builder** tab (port of the sheet's section: per-lap or first-lap+subsequent → cumulative + km splits; verified against the sheet's own numbers 66.2/125.8/245.0); **Power for speed** rebuilt as the spreadsheet-style graded color grid (speeds × CdA → W, all inputs editable, flat/track toggle kept); **Time adjuster** drops the confusing full-sim ride mode (owner request) and gains a colored Δ column + totals.
+- **(3) Visual refresh:** dark left rail with monogram + blue active state, gradient canvas, soft card elevation, blurred mobile tab bar, denser desktop padding. Global CSS + TabShell only — no per-page churn.
+- **(10 follow-through)** Ride detail shows official-duration and recorded-samples average power side by side.
+
+**Answers recorded for the owner (item 13/8):** CdA already excludes laps 1 AND 2 (§4.9 window is laps 3→16) — no change needed; the per-lap chart caption now says so. The accel/decel panel reports seconds spent accelerating vs decelerating (±0.02 m/s² deadband) per lap and overall — a smoothness/pacing diagnostic.
+
+**Deviations from SPEC (explicit, §9):** rolling-CdA window 1 lap → 2 laps (owner-requested, display-only); `Scenario.overrides.startLapS` added beyond §3.4; §5.8 time-adjuster's "full sim mode" toggle removed (owner-requested); §4.8 geometry fit now constrains template amplitude > 0 (bug fix — the free-sign fit could return phase flipped by half a period). `ENGINE_VERSION` not bumped: no persisted `AnalysisResult` numbers change (geometry/rolling/overlay are display-path only; `peakSpeedPhaseDeg` uses its own full-race profile argmax, not the fit).
+
+**Known limits, on the record:** the start-split model treats lap 1 as pure input (no within-lap-1 dynamics; ghost gap charts draw a nominal straight line across lap 1); overlay phase alignment is only as good as each ride's §4.8 fit (~±6 m bins); §4.7.3 oscillation anchoring remains the real fix for line height and would tighten everything here.

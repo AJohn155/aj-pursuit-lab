@@ -86,3 +86,92 @@ describe('parseGear', () => {
     expect(parseGear('')).toBeNull()
   })
 })
+
+// --- Owner-sheet paste support (2026-07 items 1/11) -------------------------------------
+
+import { detectOwnerSheet, matchVenueName, normalizeDateString } from '../csv'
+import { parseSplitsText } from '../splits'
+
+const OWNER_HEADER =
+  'Event\tDate\tLocation\tAir density\tGearing\tOverall time\tStart Lap\tAvg non-start lap split\tAvg Power\tAvg Start Power (10 sec)\tAvg non-start Power\t1st kilo\t2nd kilo\t3rd kilo\t4th kilo\t\t2km split\t3km split\t\t' +
+  Array.from({ length: 16 }, (_, i) => `Lap ${i + 1}`).join('\t') +
+  '\t\tAdjusted Density\tAdjusted Time\t\tComments/Notes:'
+
+describe('owner history-sheet paste (2026-07 item 1)', () => {
+  it('parses tab-separated pastes', () => {
+    const rows = parseCsv('a\tb\n1\t2')
+    expect(rows).toEqual([
+      ['a', 'b'],
+      ['1', '2'],
+    ])
+  })
+
+  it('detects the owner header layout and maps every needed column', () => {
+    const { headers } = csvToRecords(parseCsv(OWNER_HEADER + '\n' + 'x'.repeat(0)))
+    const m = detectOwnerSheet(headers)
+    expect(m).not.toBeNull()
+    expect(m!.event).toBe('Event')
+    expect(m!.date).toBe('Date')
+    expect(m!.location).toBe('Location')
+    expect(m!.airDensity).toBe('Air density')
+    expect(m!.gearing).toBe('Gearing')
+    expect(m!.overallTime).toBe('Overall time')
+    expect(m!.avgPower).toBe('Avg Power')
+    expect(m!.notes).toBe('Comments/Notes:')
+    expect(m!.lapCols).toEqual(Array.from({ length: 16 }, (_, i) => `Lap ${i + 1}`))
+  })
+
+  it('does not fire on a generic CSV', () => {
+    expect(detectOwnerSheet(['date', 'venue', 'time'])).toBeNull()
+  })
+})
+
+describe('normalizeDateString (2026-07 item 11)', () => {
+  it('passes through ISO and pads', () => {
+    expect(normalizeDateString('2025-10-24')).toBe('2025-10-24')
+    expect(normalizeDateString('2025-3-4')).toBe('2025-03-04')
+  })
+  it('parses US M/D/YYYY and M/D/YY', () => {
+    expect(normalizeDateString('10/24/2025')).toBe('2025-10-24')
+    expect(normalizeDateString('3/4/25')).toBe('2025-03-04')
+  })
+  it('parses month-name forms', () => {
+    expect(normalizeDateString('24 Oct 2025')).toBe('2025-10-24')
+    expect(normalizeDateString('Oct 24, 2025')).toBe('2025-10-24')
+  })
+  it('rejects garbage', () => {
+    expect(normalizeDateString('sometime last year')).toBeNull()
+  })
+})
+
+describe('matchVenueName', () => {
+  const venues = [{ name: 'Peñalolén (Santiago)' }, { name: 'Ballerup Super Arena' }]
+  it('matches exact, case-insensitive', () => {
+    expect(matchVenueName('ballerup super arena', venues)?.name).toBe('Ballerup Super Arena')
+  })
+  it('matches contains in either direction', () => {
+    expect(matchVenueName('Santiago', venues)?.name).toBe('Peñalolén (Santiago)')
+    expect(matchVenueName('Peñalolén (Santiago) velodrome', venues)?.name).toBe('Peñalolén (Santiago)')
+    expect(matchVenueName('Ballerup', venues)?.name).toBe('Ballerup Super Arena')
+  })
+})
+
+describe('parseSplitsText (2026-07 item 16)', () => {
+  it('parses per-lap splits with mixed separators', () => {
+    const r = parseSplitsText('19.6, 14.4 14.5\n14.6')
+    expect(r.error).toBeNull()
+    expect(r.splits).toEqual([19.6, 14.4, 14.5, 14.6])
+  })
+  it('detects cumulative splits and converts to per-lap', () => {
+    const r = parseSplitsText('19.6 34.0 48.5 63.1')
+    expect(r.error).toBeNull()
+    expect(r.splits.map((s) => Number(s.toFixed(3)))).toEqual([19.6, 14.4, 14.5, 14.6])
+  })
+  it('flags nonsense values', () => {
+    expect(parseSplitsText('19.6 999').error).not.toBeNull()
+    expect(parseSplitsText('abc').error).not.toBeNull()
+  })
+  it('empty text is fine (splits optional)', () => {
+    expect(parseSplitsText('  ')).toEqual({ splits: [], error: null })
+  })
+})

@@ -17,6 +17,30 @@ interface RawRecord {
 }
 
 /**
+ * First record's wall-clock timestamp, or null if the file carries none — used to
+ * auto-prefill the ride date on upload (owner request 2026-07, item 11). FIT timestamps
+ * are UTC; a late-evening race can land on the next UTC day, so this is a prefill, not
+ * authoritative.
+ */
+export function fitStartDate(content: ArrayBuffer | Uint8Array): Date | null {
+  const parser = new FitParser({
+    speedUnit: 'm/s',
+    lengthUnit: 'm',
+    temperatureUnit: 'celsius',
+    elapsedRecordField: true,
+    mode: 'list',
+    force: true,
+  })
+  let ts: Date | null = null
+  parser.parse(content as ArrayBuffer, (err, data) => {
+    if (err) return
+    const records = (data?.records ?? []) as unknown as RawRecord[]
+    ts = records.find((r) => r.timestamp instanceof Date)?.timestamp ?? null
+  })
+  return ts
+}
+
+/**
  * Parse a `.fit` file into record-level samples (SPEC §4.4). Extracts timestamp/elapsed,
  * power, wheel speed, distance, cadence, temperature. Records without speed+distance
  * (non-`record` messages) are dropped. Synchronous — fit-file-parser invokes its callback

@@ -116,6 +116,11 @@ export function fitVenueGeometry(
       }
       if (den < 1e-9) continue
       const alpha = num / den
+      // Physical constraint: wheel speed RISES in bends (kV > 1 — the lean lengthens the
+      // wheel path), so only positive template amplitudes are admissible. Without this the
+      // free-sign least squares can lock onto the speed minima and report a phase flipped
+      // by half a period (observed on the final fixture, 2026-07).
+      if (alpha <= 0) continue
       let ss = 0
       for (let i = 0; i < nBins; i++) {
         const tc = tmpl[i] - tm

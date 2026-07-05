@@ -22,27 +22,36 @@ export default function GhostBuilder({
   settings: Settings
 }) {
   const [targetTimeInput, setTargetTimeInput] = useState('245')
-  const [kind, setKind] = useState<GhostScheduleKind>('template')
+  const [kind, setKind] = useState<GhostScheduleKind>('startSplit')
+  const [startLapInput, setStartLapInput] = useState('21.5')
   const [overlayRideId, setOverlayRideId] = useState('')
 
   const targetTimeS = Number(targetTimeInput)
+  const startLapS = Number(startLapInput)
 
   const { schedule, error }: { schedule: GhostSchedule | null; error: string | null } = useMemo(() => {
     if (!environment || !Number.isFinite(targetTimeS) || targetTimeS <= 0) return { schedule: null, error: null }
+    if (kind === 'startSplit' && (!Number.isFinite(startLapS) || startLapS <= 0)) return { schedule: null, error: null }
     try {
       return {
-        schedule: solveGhostSchedule(kind, targetTimeS, {
-          cdaM2: environment.cdaM2,
-          rho: environment.rho,
-          params: environment.params,
-          track: environment.track,
-        }),
+        schedule: solveGhostSchedule(
+          kind,
+          targetTimeS,
+          {
+            cdaM2: environment.cdaM2,
+            rho: environment.rho,
+            params: environment.params,
+            track: environment.track,
+          },
+          undefined,
+          startLapS,
+        ),
         error: null,
       }
     } catch (e) {
       return { schedule: null, error: e instanceof Error ? e.message : String(e) }
     }
-  }, [environment, targetTimeS, kind])
+  }, [environment, targetTimeS, kind, startLapS])
 
   const overlayRide = rides.find((r) => r.id === overlayRideId) ?? null
 
@@ -58,7 +67,7 @@ export default function GhostBuilder({
     }
   }, [overlayRide, schedule, venues, settings])
 
-  const ghostSeries = schedule ? ghostDistanceTimeSeries(schedule.sim) : null
+  const ghostSeries = schedule ? ghostDistanceTimeSeries(schedule) : null
   const gaps = ghostSeries && overlaySeries ? gapCharts([ghostSeries, overlaySeries]) : null
 
   return (
@@ -83,10 +92,23 @@ export default function GhostBuilder({
             onChange={(e) => setKind(e.target.value as GhostScheduleKind)}
             className="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
           >
+            <option value="startSplit">Start split + settle power</option>
             <option value="template">Owner-shaped start ramp</option>
             <option value="even">Even (flat power)</option>
           </select>
         </label>
+        {kind === 'startSplit' && (
+          <label className="block text-sm">
+            <span className="font-medium text-slate-700">Expected start lap (s)</span>
+            <input
+              type="number"
+              step="0.1"
+              value={startLapInput}
+              onChange={(e) => setStartLapInput(e.target.value)}
+              className="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+            />
+          </label>
+        )}
         <label className="block text-sm">
           <span className="font-medium text-slate-700">Overlay vs ride</span>
           <select
@@ -111,12 +133,12 @@ export default function GhostBuilder({
       {schedule && (
         <div className="flex flex-wrap gap-6 text-sm text-slate-700">
           <div>
-            <span className="text-slate-500">Steady power: </span>
+            <span className="text-slate-500">{schedule.startLapS != null ? 'Settle power (excl. lap 1): ' : 'Steady power: '}</span>
             <span className="font-mono font-medium">{schedule.steadyW.toFixed(0)} W</span>
           </div>
           <div>
             <span className="text-slate-500">Predicted finish: </span>
-            <span className="font-mono font-medium">{schedule.sim.finishTimeS.toFixed(3)} s</span>
+            <span className="font-mono font-medium">{schedule.predictedTimeS.toFixed(3)} s</span>
           </div>
         </div>
       )}
@@ -126,7 +148,7 @@ export default function GhostBuilder({
           <table className="min-w-full divide-y divide-slate-200 text-xs">
             <thead>
               <tr>
-                {schedule.sim.lapTimes.map((_, i) => (
+                {schedule.lapTimes.map((_, i) => (
                   <th key={i} className="px-2 py-1 text-right font-medium text-slate-500">
                     L{i + 1}
                   </th>
@@ -135,7 +157,7 @@ export default function GhostBuilder({
             </thead>
             <tbody>
               <tr>
-                {schedule.sim.lapTimes.map((lt, i) => (
+                {schedule.lapTimes.map((lt, i) => (
                   <td key={i} className="px-2 py-1 text-right font-mono text-slate-800">
                     {lt.toFixed(2)}
                   </td>

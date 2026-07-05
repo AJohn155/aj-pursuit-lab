@@ -75,6 +75,14 @@ export default function RidesList() {
     }
   }
 
+  async function handleDelete(ride: Ride) {
+    const label = `${ride.eventName || 'Untitled ride'} — ${ride.date} (${ride.officialTimeS.toFixed(3)}s)`
+    if (!window.confirm(`Delete ride "${label}"? The .fit file and analysis go with it. This can't be undone.`)) {
+      return
+    }
+    await dataStore.rides.delete(ride.id)
+  }
+
   if (!settings) return <p className="text-sm text-slate-500">Loading…</p>
   if (rides.length === 0) {
     return <p className="text-sm text-slate-500">No rides yet — upload a .fit file below to add the first one.</p>
@@ -109,6 +117,7 @@ export default function RidesList() {
                 </th>
               ))}
               <th className="px-3 py-2 font-medium">Kit</th>
+              <th className="px-3 py-2 font-medium" />
             </tr>
           </thead>
           <tbody>
@@ -137,6 +146,15 @@ export default function RidesList() {
                   )}
                 </td>
                 <td className="px-3 py-2 text-xs text-slate-500">{ride.kit.join(', ') || '—'}</td>
+                <td className="px-3 py-2 text-right">
+                  <button
+                    type="button"
+                    onClick={() => void handleDelete(ride)}
+                    className="rounded-lg border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                  >
+                    Delete
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>

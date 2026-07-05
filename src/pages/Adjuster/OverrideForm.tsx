@@ -10,7 +10,7 @@ const inputClass = 'mt-1 block w-full rounded-md border border-slate-300 px-2 py
 const labelClass = 'block text-sm'
 const labelTextClass = 'font-medium text-slate-700'
 
-export type PowerMode = 'schedule' | 'constant'
+export type PowerMode = 'schedule' | 'constant' | 'startSplit'
 
 export interface OverrideFormState {
   baselineRef: string | 'blank'
@@ -24,6 +24,7 @@ export interface OverrideFormState {
   powerMode: PowerMode
   powerScalePct: string
   constantPowerInput: string
+  startLapInput: string
 }
 
 export interface OverrideFormProps extends OverrideFormState {
@@ -166,10 +167,18 @@ export default function OverrideForm(props: OverrideFormProps) {
           <label className="flex items-center gap-1.5">
             <input
               type="radio"
-              checked={isBlank || props.powerMode === 'constant'}
+              checked={(isBlank && props.powerMode !== 'startSplit') || props.powerMode === 'constant'}
               onChange={() => onChange('powerMode', 'constant')}
             />
             Constant target (W)
+          </label>
+          <label className="flex items-center gap-1.5">
+            <input
+              type="radio"
+              checked={props.powerMode === 'startSplit'}
+              onChange={() => onChange('powerMode', 'startSplit')}
+            />
+            Start split + settle power
           </label>
         </div>
         {!isBlank && props.powerMode === 'schedule' ? (
@@ -185,6 +194,29 @@ export default function OverrideForm(props: OverrideFormProps) {
               className={inputClass}
             />
           </label>
+        ) : props.powerMode === 'startSplit' ? (
+          <div className="grid grid-cols-2 gap-3">
+            <label className={labelClass}>
+              <span className="text-xs text-slate-500">Expected start lap (s)</span>
+              <input
+                type="number"
+                step="0.1"
+                value={props.startLapInput}
+                onChange={(e) => onChange('startLapInput', e.target.value)}
+                className={inputClass}
+              />
+            </label>
+            <label className={labelClass}>
+              <span className="text-xs text-slate-500">Power excluding lap 1 (W) — ridden from at-speed</span>
+              <input
+                type="number"
+                step="1"
+                value={props.constantPowerInput}
+                onChange={(e) => onChange('constantPowerInput', e.target.value)}
+                className={inputClass}
+              />
+            </label>
+          </div>
         ) : (
           <label className={labelClass}>
             <span className="text-xs text-slate-500">

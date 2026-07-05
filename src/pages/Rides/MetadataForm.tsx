@@ -6,7 +6,8 @@ import type { FormEvent } from 'react'
 import { airDensity as computeAirDensity, effectiveCrr, makeTrack } from '../../engine/index'
 import type { RiderParams } from '../../engine/index'
 import { ENGINE_VERSION } from '../../engine/constants'
-import { analyzeRideFull } from '../../engine/ingest'
+import { analyzeRideFull, fitStartDate } from '../../engine/ingest'
+import { parseSplitsText } from './splits'
 import { dataStore } from '../../store/DataStore'
 import { bytesToBase64, FIT_FILE_B64_MAX_BYTES } from '../../store/encoding'
 import { SETTINGS_ID, withSettingsDefaults, type Ride, type Settings, type Venue } from '../../store/types'
@@ -55,7 +56,11 @@ function MetadataFormInner({
 }: MetadataFormProps & { settings: Settings }) {
   const venues = useCollection(dataStore.venues)
 
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  // Prefill the date from the file's own first timestamp (owner request 2026-07 item 11);
+  // FIT timestamps are UTC, so this is a prefill the owner can correct, not authoritative.
+  const [date, setDate] = useState(
+    () => fitStartDate(detection.fitBytes)?.toISOString().slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+  )
   const [eventName, setEventName] = useState('')
   const [round, setRound] = useState<Ride['round']>('qualifying')
   const [venueId, setVenueId] = useState('')
@@ -73,8 +78,11 @@ function MetadataFormInner({
   const [interrupted, setInterrupted] = useState(false)
   const [result, setResult] = useState('')
   const [officialTimeS, setOfficialTimeS] = useState(String(detection.officialTimeS))
+  const [splitsText, setSplitsText] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const parsedSplits = parseSplitsText(splitsText)
 
   const venue: Venue | undefined = venues.find((v) => v.id === venueId)
 
@@ -88,6 +96,10 @@ function MetadataFormInner({
     const official = Number.parseFloat(officialTimeS)
     if (!Number.isFinite(official) || official <= 0) {
       setError('Official time must be a positive number.')
+      return
+    }
+    if (parsedSplits.error) {
+      setError(`Official splits: ${parsedSplits.error}`)
       return
     }
 
@@ -171,7 +183,7 @@ function MetadataFormInner({
         eventName,
         round,
         officialTimeS: official,
-        officialSplits: [],
+        officialSplits: parsedSplits.splits,
         gear: { chainring, cog },
         airDensity: airDensityVal,
         tempC: tempCVal,
@@ -334,6 +346,24 @@ function MetadataFormInner({
           onChange={(e) => setSystemMassKg(e.target.value === '' ? '' : Number(e.target.value))}
           className={inputClass}
         />
+      </label>
+
+      <label className={labelClass}>
+        <span className={labelTextClass}>Official lap splits (optional)</span>
+        <textarea
+          value={splitsText}
+          onChange={(e) => setSplitsText(e.target.value)}
+          rows={2}
+          placeholder="Paste 16 lap times — per-lap or cumulative, spaces/commas/newlines all fine"
+          className={inputClass}
+        />
+        {splitsText.trim() !== '' && !parsedSplits.error && (
+          <span className="mt-0.5 block text-xs text-slate-500">
+            Parsed {parsedSplits.splits.length} lap(s), total{' '}
+            {parsedSplits.splits.reduce((s, x) => s + x, 0).toFixed(3)} s
+          </span>
+        )}
+        {parsedSplits.error && <span className="mt-0.5 block text-xs text-red-600">{parsedSplits.error}</span>}
       </label>
 
       <label className={labelClass}>

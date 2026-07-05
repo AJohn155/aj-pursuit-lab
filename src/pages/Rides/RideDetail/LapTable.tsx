@@ -1,4 +1,6 @@
-// Lap table (SPEC §5.1): split, official split, CdA, line height, W.
+// Lap table (SPEC §5.1): split, official split, CdA, line height, W — plus the total
+// extra distance the line heights imply (owner request 2026-07: "show extra meters
+// traveled total").
 
 import type { LapResult } from '../../../engine/ingest'
 
@@ -7,6 +9,8 @@ const LINE_HEIGHT_DEGENERATE_SPREAD_M = 0.001
 export default function LapTable({ laps, officialSplits }: { laps: LapResult[]; officialSplits: number[] }) {
   const heights = laps.map((l) => l.lineHeightM)
   const heightSpread = Math.max(...heights) - Math.min(...heights)
+  // Riding h above the datum adds 2π·h per lap (two full turns' worth of circumference).
+  const totalExtraM = heights.reduce((s, h) => s + 2 * Math.PI * h, 0)
 
   return (
     <section className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
@@ -41,6 +45,13 @@ export default function LapTable({ laps, officialSplits }: { laps: LapResult[]; 
           </tbody>
         </table>
       </div>
+      <p className="text-xs text-slate-600">
+        Total extra distance vs. the datum line: <span className="font-semibold">{totalExtraM.toFixed(1)} m</span>{' '}
+        over {laps.length} laps ({totalExtraM >= 0 ? '+' : ''}
+        {((totalExtraM / laps.length) * 100 / 250).toFixed(2)}% per lap). Treat as an estimate — the
+        start-anchor calibration carries a ±0.2–0.4% uncertainty that can swamp it (a negative total is
+        that artifact, not riding under the black line).
+      </p>
       {heightSpread < LINE_HEIGHT_DEGENERATE_SPREAD_M && (
         <p className="text-xs text-slate-400">
           Line height is nearly identical across laps because lap boundaries are currently

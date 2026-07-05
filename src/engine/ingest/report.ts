@@ -19,7 +19,8 @@ import { computeAccelDecel } from './accel'
 import type { AccelDecel } from './accel'
 import { analyzeRide } from './analyze'
 import type { AnalyzeOptions, RideAnalysis } from './analyze'
-import { peakSpeedPhaseDeg, steadyLapSpeedProfiles } from './geometry'
+import { fitVenueGeometry, peakSpeedPhaseDeg, steadyLapSpeedProfiles } from './geometry'
+import type { GeometryFit } from './geometry'
 import { lapSampleGroups, raceSampleSeries } from './laps'
 import { lapSpeedVsPositionSeries } from './overlay'
 import type { LapPositionSeries } from './overlay'
@@ -79,6 +80,14 @@ export interface FullRideAnalysis {
   wBalCurve: WBalPoint[]
   quality: { score: number; badge: QualityBadge; flags: QualityFlag[] }
   analysisResult: AnalysisResult
+  /**
+   * §4.8 geometry fit for THIS ride's steady laps — charts use `phaseOffsetM` to re-anchor
+   * position-in-lap onto track coordinates (0 = start of a straight), so overlays from
+   * different rides line up with each other and with the bends, regardless of each ride's
+   * own start-datum anchoring error (the §4.7.3 gap). Null when the fit isn't possible
+   * (degenerate data, or a synthetic scenario whose positions are already exact).
+   */
+  geometry: GeometryFit | null
 }
 
 const PEAK_PHASE_BINS = 36
@@ -170,13 +179,26 @@ export function analyzeRideFull(content: ArrayBuffer | Uint8Array, opts: Analyze
   const overlay = lapSpeedVsPositionSeries(timeline, laps, track.lapLengthM)
 
   const series = raceSampleSeries(timeline, laps, track)
+  // Owner-requested (2026-07): a 2-lap window instead of §4.9's 1-lap — the 1-lap window
+  // was too spiky to read; this is the display-only diagnostic, so the change is purely
+  // presentational (cdaRace and the per-lap CdA are untouched).
   const rolling = cdaRolling(
     series.map((s) => s.sample),
     series.map((s) => s.distCumM),
     opts.rho,
     opts.params,
     track,
+    2 * track.lapLengthM,
   )
+
+  const geometry: GeometryFit | null = (() => {
+    try {
+      const steadyProfiles = steadyLapSpeedProfiles(timeline, laps, track.lapLengthM)
+      return fitVenueGeometry(steadyProfiles, track.lapLengthM, { comHeightM: opts.params.comHeightM })
+    } catch {
+      return null
+    }
+  })()
 
   const fullLapProfiles = steadyLapSpeedProfiles(timeline, laps, track.lapLengthM, PEAK_PHASE_BINS, {
     firstLap: 1,
@@ -240,5 +262,6 @@ export function analyzeRideFull(content: ArrayBuffer | Uint8Array, opts: Analyze
     wBalCurve,
     quality: { score: quality.score, badge: quality.badge, flags: quality.flags },
     analysisResult,
+    geometry,
   }
 }

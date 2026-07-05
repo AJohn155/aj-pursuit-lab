@@ -1,13 +1,13 @@
 // Time adjuster calculator (SPEC §5.8): two environment blocks (T/P/RH → ρ via §4.2),
-// lap-time vector in, adjusted out; fast mode default, full-sim mode toggle.
+// lap-time vector in, adjusted out, with a colored Δ column (owner request 2026-07 item
+// 17). The former "full-sim mode" (re-simulating a stored ride at the target density) was
+// removed at the owner's request — its flow didn't make sense inside a lap-time-vector
+// calculator; the Adjuster's density override is the right home for that question.
 
 import { useMemo, useState } from 'react'
 import { airDensity } from '../../engine/atmosphere'
-import { simulate } from '../../engine/simulate'
 import { adjustLapTimesFastByDensity } from '../../engine/calculators'
-import { resolveScenario, resolveScenarioBaseline } from '../../store/scenario'
-import type { ScenarioBaseline } from '../../store/scenario'
-import type { Ride, Settings, Venue } from '../../store/types'
+import { formatMinSec } from './schedule'
 
 interface EnvBlockState {
   mode: 'direct' | 'tprh'
@@ -94,20 +94,10 @@ function EnvBlockForm({
   )
 }
 
-export default function TimeAdjusterCalculator({
-  rides,
-  venues,
-  settings,
-}: {
-  rides: Ride[]
-  venues: Venue[]
-  settings: Settings
-}) {
+export default function TimeAdjusterCalculator() {
   const [rideEnv, setRideEnv] = useState<EnvBlockState>(DEFAULT_ENV)
-  const [targetEnv, setTargetEnv] = useState<EnvBlockState>({ ...DEFAULT_ENV, rho: String(settings.referenceAirDensity) })
-  const [lapTimesInput, setLapTimesInput] = useState('15.6')
-  const [fullMode, setFullMode] = useState(false)
-  const [baselineRef, setBaselineRef] = useState<string | 'blank'>('blank')
+  const [targetEnv, setTargetEnv] = useState<EnvBlockState>({ ...DEFAULT_ENV, rho: '1.172' })
+  const [lapTimesInput, setLapTimesInput] = useState('21.5 14.9 14.9 14.9 14.9 14.9 14.9 14.9 14.9 14.9 14.9 14.9 14.9 14.9 14.9 14.9')
 
   const rhoRide = resolveRho(rideEnv)
   const rhoTarget = resolveRho(targetEnv)
@@ -117,34 +107,16 @@ export default function TimeAdjusterCalculator({
     .map((s) => Number(s.trim()))
     .filter((v) => Number.isFinite(v) && v > 0)
 
-  const adjustedFast = useMemo(() => {
+  const adjusted = useMemo(() => {
     if (!Number.isFinite(rhoRide) || !Number.isFinite(rhoTarget) || lapTimesS.length === 0) return null
     return adjustLapTimesFastByDensity(lapTimesS, rhoRide, rhoTarget, lapTimesInput.trim().split(/[,\s]+/).length > 1)
   }, [rhoRide, rhoTarget, lapTimesInput, lapTimesS])
 
-  const baselineResolution: ScenarioBaseline | { error: string } | null = fullMode
-    ? resolveScenarioBaseline(baselineRef, rides, venues, settings)
-    : null
-  const baselineError =
-    baselineResolution && typeof baselineResolution === 'object' && 'error' in baselineResolution
-      ? baselineResolution.error
-      : null
+  const totalIn = lapTimesS.reduce((s, x) => s + x, 0)
+  const totalOut = adjusted ? adjusted.reduce((s, x) => s + x, 0) : 0
+  const totalDelta = totalOut - totalIn
 
-  const fullResult = useMemo(() => {
-    if (!fullMode || !baselineResolution || baselineError) return null
-    const resolved = resolveScenario(baselineResolution as ScenarioBaseline, {}, settings, venues)
-    const sim = simulate({
-      power: resolved.power,
-      cdaM2: resolved.cdaM2,
-      rho: rhoTarget,
-      params: resolved.params,
-      track: resolved.track,
-      distanceM: resolved.distanceM,
-      v0: resolved.v0,
-      lapPhaseOffsetM: resolved.lapPhaseOffsetM,
-    })
-    return resolved.headStartS + sim.finishTimeS
-  }, [fullMode, baselineResolution, baselineError, rhoTarget, settings, venues])
+  const deltaClass = (d: number) => (d < -0.0005 ? 'text-green-700' : d > 0.0005 ? 'text-red-700' : 'text-slate-500')
 
   return (
     <div className="space-y-4">
@@ -153,75 +125,62 @@ export default function TimeAdjusterCalculator({
         <EnvBlockForm label="Target environment" value={targetEnv} onChange={setTargetEnv} />
       </div>
 
-      <label className="flex items-center gap-2 text-sm text-slate-700">
-        <input type="checkbox" checked={fullMode} onChange={(e) => setFullMode(e.target.checked)} />
-        Full-sim mode (re-simulate a real ride's power at the target density, instead of scaling a lap-time vector)
+      <label className="block text-sm">
+        <span className="font-medium text-slate-700">Lap times (s), comma or space separated</span>
+        <input
+          value={lapTimesInput}
+          onChange={(e) => setLapTimesInput(e.target.value)}
+          className="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1 font-mono text-sm"
+        />
       </label>
 
-      {!fullMode && (
+      {adjusted && (
         <>
-          <label className="block text-sm">
-            <span className="font-medium text-slate-700">Lap times (s), comma or space separated</span>
-            <input
-              value={lapTimesInput}
-              onChange={(e) => setLapTimesInput(e.target.value)}
-              className="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
-            />
-          </label>
-          {adjustedFast && (
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
-              <table className="min-w-full divide-y divide-slate-200 text-sm">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-medium text-slate-600">Lap</th>
-                    <th className="px-3 py-2 text-right font-medium text-slate-600">Input (s)</th>
-                    <th className="px-3 py-2 text-right font-medium text-slate-600">Adjusted (s)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {lapTimesS.map((lt, i) => (
+          <div className="flex flex-wrap gap-6 text-sm text-slate-700">
+            <div>
+              <span className="text-slate-500">Input total: </span>
+              <span className="font-mono font-semibold">{totalIn.toFixed(2)} s</span>
+              <span className="ml-1 font-mono text-slate-500">({formatMinSec(totalIn)})</span>
+            </div>
+            <div>
+              <span className="text-slate-500">Adjusted total: </span>
+              <span className="font-mono font-semibold">{totalOut.toFixed(2)} s</span>
+              <span className="ml-1 font-mono text-slate-500">({formatMinSec(totalOut)})</span>
+            </div>
+            <div className={`font-mono font-semibold ${deltaClass(totalDelta)}`}>
+              {totalDelta >= 0 ? '+' : ''}
+              {totalDelta.toFixed(2)} s
+            </div>
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="min-w-full divide-y divide-slate-200 text-sm">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium text-slate-600">Lap</th>
+                  <th className="px-3 py-2 text-right font-medium text-slate-600">Input (s)</th>
+                  <th className="px-3 py-2 text-right font-medium text-slate-600">Adjusted (s)</th>
+                  <th className="px-3 py-2 text-right font-medium text-slate-600">Δ (s)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {lapTimesS.map((lt, i) => {
+                  const d = adjusted[i] - lt
+                  return (
                     <tr key={i}>
                       <td className="px-3 py-2 text-slate-900">{i + 1}</td>
                       <td className="px-3 py-2 text-right font-mono text-slate-700">{lt.toFixed(3)}</td>
-                      <td className="px-3 py-2 text-right font-mono text-slate-900">{adjustedFast[i].toFixed(4)}</td>
+                      <td className="px-3 py-2 text-right font-mono text-slate-900">{adjusted[i].toFixed(4)}</td>
+                      <td className={`px-3 py-2 text-right font-mono font-medium ${deltaClass(d)}`}>
+                        {d >= 0 ? '+' : ''}
+                        {d.toFixed(4)}
+                      </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </>
-      )}
-
-      {fullMode && (
-        <div className="space-y-3">
-          <label className="block text-sm sm:w-96">
-            <span className="font-medium text-slate-700">Ride to re-simulate</span>
-            <select
-              value={baselineRef}
-              onChange={(e) => setBaselineRef(e.target.value)}
-              className="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
-            >
-              <option value="blank">Blank (nominal starting guess)</option>
-              {[...rides]
-                .sort((a, b) => b.date.localeCompare(a.date))
-                .map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.eventName || 'Untitled ride'} — {r.date}
-                  </option>
-                ))}
-            </select>
-          </label>
-          {baselineError && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{baselineError}</div>
-          )}
-          {fullResult != null && (
-            <div className="rounded-lg bg-slate-50 p-4 text-center">
-              <div className="text-xs uppercase tracking-wide text-slate-500">Re-simulated time at target ρ</div>
-              <div className="text-3xl font-bold text-slate-900">{fullResult.toFixed(3)} s</div>
-            </div>
-          )}
-        </div>
       )}
     </div>
   )

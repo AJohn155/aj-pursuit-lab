@@ -8,10 +8,11 @@ import { defaultStartPower, simulate } from '../../engine/simulate'
 import type { SimResult } from '../../engine/simulate'
 import { solvePowerForTime, solveTemplatePowerForTime } from '../../engine/solve'
 import type { SolveBase } from '../../engine/solve'
+import { solveSettlePowerForTime, startSplitPlan } from '../../engine/startsplit'
 import type { ResolvedScenario } from '../../store/scenario'
 import type { DistanceTimeSeries } from '../Compare/compare'
 
-export type GhostScheduleKind = 'even' | 'template'
+export type GhostScheduleKind = 'even' | 'template' | 'startSplit'
 
 /** Everything the ghost builder needs from a resolved baseline, minus its power (the
  * ghost builds its own schedule from scratch — see solveGhostSchedule). */
@@ -22,22 +23,36 @@ const DEFAULT_POWER_BRACKET: [number, number] = [150, 800]
 export interface GhostSchedule {
   steadyW: number
   sim: SimResult
+  /** Total predicted time from the true start (= sim finish plus the entered start split
+   * for the startSplit kind; = sim finish otherwise). */
+  predictedTimeS: number
+  /** Per-lap times from the true start (lap 1 = the entered split for startSplit). */
+  lapTimes: number[]
+  /** Set only for the startSplit kind. */
+  startLapS?: number
 }
 
 /**
- * Solves for the steady-power level that hits `targetTimeS`, either as a flat schedule
- * ("even") or the owner-shaped standing-start template ("template") — the same target-time
- * inversion §4.11 already does for a flat power, extended to the template shape via
- * `solveTemplatePowerForTime` (engine/solve.ts). Runs from a clean standing start (v0=0.5,
- * full 4000 m) — the ghost is a hypothetical plan, not anchored to any ride's real
- * head-start/under-read-power quirk (store/scenario.ts's concern for a *real* baseline).
+ * Solves for the steady-power level that hits `targetTimeS`: a flat schedule ("even"),
+ * the owner-shaped standing-start template ("template"), or the owner's start-split model
+ * ("startSplit" — lap 1 entered directly, rest ridden at settle power from at-speed,
+ * engine/startsplit.ts; owner request 2026-07 item 12). Even/template run from a clean
+ * standing start (v0=0.5, full 4000 m) — the ghost is a hypothetical plan, not anchored to
+ * any ride's real head-start/under-read-power quirk.
  */
 export function solveGhostSchedule(
   kind: GhostScheduleKind,
   targetTimeS: number,
   base: GhostBase,
   bracket: [number, number] = DEFAULT_POWER_BRACKET,
+  startLapS = 21.5,
 ): GhostSchedule {
+  if (kind === 'startSplit') {
+    const ssBase = { cdaM2: base.cdaM2, rho: base.rho, params: base.params, track: base.track }
+    const steadyW = solveSettlePowerForTime(targetTimeS, startLapS, ssBase, bracket)
+    const plan = startSplitPlan(startLapS, steadyW, ssBase)
+    return { steadyW, sim: plan.sim, predictedTimeS: plan.predictedTimeS, lapTimes: plan.lapTimes, startLapS }
+  }
   const solveBase: SolveBase = { ...base, power: 0, v0: 0.5, distanceM: 4000 }
   const steadyW =
     kind === 'even'
@@ -45,18 +60,32 @@ export function solveGhostSchedule(
       : solveTemplatePowerForTime(targetTimeS, solveBase, bracket)
   const power = kind === 'even' ? steadyW : defaultStartPower(steadyW)
   const sim = simulate({ ...base, power, v0: 0.5, distanceM: 4000 })
-  return { steadyW, sim }
+  return { steadyW, sim, predictedTimeS: sim.finishTimeS, lapTimes: sim.lapTimes }
 }
 
 /** Resamples a ghost sim's trajectory (dt=0.1) to a 1 Hz distance-vs-time series, the
  * same shape Compare's gap chart consumes (buildDistanceTimeSeries), so the ghost can be
- * overlaid against any real ride with the existing gapCharts()/timeAtDistance() math. */
-export function ghostDistanceTimeSeries(sim: SimResult): DistanceTimeSeries {
+ * overlaid against any real ride with the existing gapCharts()/timeAtDistance() math.
+ *
+ * For a startSplit ghost, the sim covers laps 2..n only — its distances shift up one lap
+ * and its times shift by the start split, with a straight-line lap 1 prepended (the model
+ * doesn't describe within-lap-1 dynamics; the gap chart's first 250 m is nominal). */
+export function ghostDistanceTimeSeries(schedule: GhostSchedule): DistanceTimeSeries {
+  const { sim } = schedule
+  const startLapS = schedule.startLapS ?? 0
+  const lapOffsetM = schedule.startLapS != null ? 250 : 0
   const lastT = sim.samples[sim.samples.length - 1]?.t ?? 0
   const nSec = Math.floor(lastT)
   const distM: number[] = []
   const elapsedS: number[] = []
   const dt = 0.1
+  if (schedule.startLapS != null) {
+    // Nominal lap 1: linear 0 → 250 m over the entered split.
+    for (let sec = 0; sec < Math.floor(startLapS); sec++) {
+      distM.push((sec / startLapS) * lapOffsetM)
+      elapsedS.push(sec)
+    }
+  }
   for (let sec = 0; sec <= nSec; sec++) {
     const idx = sec / dt
     const i0 = Math.min(sim.samples.length - 1, Math.floor(idx))
@@ -64,8 +93,8 @@ export function ghostDistanceTimeSeries(sim: SimResult): DistanceTimeSeries {
     const frac = idx - i0
     const s0 = sim.samples[i0]
     const s1 = sim.samples[i1]
-    distM.push(s0.s + frac * (s1.s - s0.s))
-    elapsedS.push(sec)
+    distM.push(lapOffsetM + s0.s + frac * (s1.s - s0.s))
+    elapsedS.push(startLapS + sec)
   }
   return { distM, elapsedS }
 }

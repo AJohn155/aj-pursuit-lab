@@ -8,7 +8,7 @@ import { dataStore } from '../../store/DataStore'
 import { SETTINGS_ID, withSettingsDefaults, type Scenario } from '../../store/types'
 import { useCollection } from '../../store/useCollection'
 import { computeRaceDayPlan } from './raceday'
-import type { RaceDayGoal } from './raceday'
+import type { RaceDayGoal, RaceDayStart } from './raceday'
 
 // Same nominal starting-guess CdA as a blank Adjuster scenario (store/scenario.ts) —
 // used only when no analyzed ride exists yet to suggest a better default.
@@ -47,6 +47,8 @@ export default function RaceDay() {
   const [goalMode, setGoalMode] = useState<'time' | 'power'>('time')
   const [goalTimeInput, setGoalTimeInput] = useState('245')
   const [goalPowerInput, setGoalPowerInput] = useState('450')
+  const [startMode, setStartMode] = useState<'split' | 'template'>('split')
+  const [startLapInput, setStartLapInput] = useState('21.5')
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
 
   const venue = venues.find((v) => v.id === venueId) ?? venues[0]
@@ -68,8 +70,14 @@ export default function RaceDay() {
     return Number.isFinite(p) && p > 0 ? { kind: 'power', powerW: p } : null
   }, [goalMode, goalTimeInput, goalPowerInput])
 
+  const start: RaceDayStart | null = useMemo(() => {
+    if (startMode === 'template') return { kind: 'template' }
+    const s = Number(startLapInput)
+    return Number.isFinite(s) && s > 0 ? { kind: 'split', startLapS: s } : null
+  }, [startMode, startLapInput])
+
   const plan = useMemo(() => {
-    if (!settings || !venue || !goal || !Number.isFinite(rho) || rho <= 0) return null
+    if (!settings || !venue || !goal || !start || !Number.isFinite(rho) || rho <= 0) return null
     try {
       return computeRaceDayPlan({
         venue,
@@ -83,11 +91,12 @@ export default function RaceDay() {
         rolloutM: settings.rolloutM,
         gear: { chainring, cog },
         goal,
+        start,
       })
     } catch {
       return null
     }
-  }, [settings, venue, goal, rho, massKg, cdaM2, chainring, cog])
+  }, [settings, venue, goal, start, rho, massKg, cdaM2, chainring, cog])
 
   async function handleSaveAsScenario() {
     if (!plan || !venue) return
@@ -105,11 +114,15 @@ export default function RaceDay() {
         massKg,
         cdA: cdaM2,
         gear: { chainring, cog },
+        ...(startMode === 'split' ? { startLapS: Number(startLapInput) } : {}),
       },
       result: {
         predictedTimeS: plan.predictedTimeS,
         lapSplits: plan.lapTimes.reduce<number[]>((acc, lt) => [...acc, (acc[acc.length - 1] ?? 0) + lt], []),
-        note: 'Race Day plan — flat-power equivalent of the shown start-ramp schedule (Adjuster/Scenario overrides have no template-shape field).',
+        note:
+          startMode === 'split'
+            ? `Race Day plan — start ${startLapInput} s + settle ${plan.steadyW.toFixed(0)} W.`
+            : 'Race Day plan — flat-power equivalent of the shown start-ramp schedule (Adjuster/Scenario overrides have no template-shape field).',
       },
       pinned: false,
     }
@@ -225,6 +238,34 @@ export default function RaceDay() {
             />
           </label>
         </div>
+
+        <fieldset className="space-y-2 rounded-lg bg-slate-50 p-3">
+          <legend className={labelTextClass}>Start lap</legend>
+          <div className="flex flex-wrap gap-4 text-sm text-slate-600">
+            <label className="flex items-center gap-1">
+              <input type="radio" checked={startMode === 'split'} onChange={() => setStartMode('split')} />
+              Expected start split (s)
+            </label>
+            <label className="flex items-center gap-1">
+              <input type="radio" checked={startMode === 'template'} onChange={() => setStartMode('template')} />
+              Simulated start ramp
+            </label>
+          </div>
+          {startMode === 'split' && (
+            <label className={labelClass}>
+              <span className="text-xs text-slate-500">
+                Lap 1 time — the rest of the race rides "power excluding lap 1" from at-speed
+              </span>
+              <input
+                type="number"
+                step="0.1"
+                value={startLapInput}
+                onChange={(e) => setStartLapInput(e.target.value)}
+                className={inputClass}
+              />
+            </label>
+          )}
+        </fieldset>
 
         <fieldset className="space-y-2 rounded-lg bg-slate-50 p-3">
           <legend className={labelTextClass}>Goal</legend>
