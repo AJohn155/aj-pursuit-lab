@@ -24,9 +24,20 @@ export interface Settings extends Persisted {
   // chart uses against each ride's real power series; tune here once real history exists.
   cpW: number
   wPrimeJ: number
+  // Gear inventory for the Cadence calculator (§5.8) — editable, seeded with the owner's
+  // usual set. Persisted so edits survive a reload, same read-time-default pattern as
+  // cpW/wPrimeJ above for pre-P7 docs that predate this field.
+  gearInventory: { chainring: number; cog: number }[]
 }
 
 export const SETTINGS_ID = 'settings'
+
+export const DEFAULT_GEAR_INVENTORY: Settings['gearInventory'] = [
+  { chainring: 59, cog: 14 },
+  { chainring: 60, cog: 14 },
+  { chainring: 64, cog: 15 },
+  { chainring: 65, cog: 15 },
+]
 
 export const DEFAULT_SETTINGS_VALUES: Omit<Settings, keyof Persisted> = {
   rolloutM: 2.09,
@@ -38,6 +49,7 @@ export const DEFAULT_SETTINGS_VALUES: Omit<Settings, keyof Persisted> = {
   referenceAirDensity: 1.15,
   cpW: 400,
   wPrimeJ: 25000,
+  gearInventory: DEFAULT_GEAR_INVENTORY,
 }
 
 /**

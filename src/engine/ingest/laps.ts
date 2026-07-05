@@ -70,6 +70,36 @@ export function constructLaps(
   }
 }
 
+const N_HALF_LAPS = N_LAPS * 2
+
+/**
+ * Half-lap boundary crossing times (datum n·125 m), SPEC §4.7.2 — deferred at P3/P4,
+ * built here for §5.9's fastest-half-lap record. Mirrors the full-lap crossings above at
+ * twice the resolution, using the same whole-race calibration (calibrationRace) and d0 so
+ * every full-lap boundary is also exactly a half-lap boundary (index 2n).
+ */
+export function constructHalfLaps(tl: Timeline, detection: Detection, laps: LapConstruction): number[] {
+  const { t, d } = tl
+  const { t0 } = detection
+  const boundaries: number[] = [t0]
+  for (let hn = 1; hn <= N_HALF_LAPS; hn++) {
+    const targetRaw = (hn * (LAP_M / 2)) / laps.calibrationRace + laps.d0
+    const tc = crossingTime(t, d, targetRaw)
+    boundaries.push(tc ?? Number.NaN)
+  }
+  return boundaries
+}
+
+/** Successive differences of half-lap boundary times — the 32 half-lap durations. */
+export function halfLapTimes(halfLapBoundaryTimes: number[]): number[] {
+  const out: number[] = []
+  for (let i = 1; i < halfLapBoundaryTimes.length; i++) {
+    const d = halfLapBoundaryTimes[i] - halfLapBoundaryTimes[i - 1]
+    out.push(Number.isNaN(d) ? Number.NaN : d)
+  }
+  return out
+}
+
 /**
  * Build energy-balance Sample groups, one array per lap. Speed is the COM datum speed
  * v_com = c·v_wheel (c = interior calibration); position-in-lap s comes from the calibrated

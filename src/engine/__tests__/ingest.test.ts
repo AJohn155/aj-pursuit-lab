@@ -8,8 +8,10 @@ import {
   analyzeRide,
   buildTimeline,
   computeAccelDecel,
+  constructHalfLaps,
   constructLaps,
   detectRace,
+  halfLapTimes,
   fitVenueGeometry,
   lapSpeedVsPositionSeries,
   parseFitRecords,
@@ -104,6 +106,31 @@ describe('per-lap line height, missing-start regression (SPEC §4.7.4)', () => {
 
     expect(Math.abs(laps.lineHeightsM[0])).toBeLessThan(1) // was ~2.24 m before the fix
     expect(laps.lineHeightsM[0]).toBeCloseTo(laps.lineHeightsM[7], 1) // consistent with a mid-race lap
+  })
+})
+
+describe('half-lap construction (SPEC §4.7.2, §5.9 fastest-half-lap)', () => {
+  it('produces 32 positive half-laps per fixture that sum in pairs to the parent full lap', () => {
+    for (const [file, officialTimeS] of [
+      ['SRM_PM9_ANDERS_TP_2025-10-24_13-18-40.fit', 246.793],
+      ['SRM_PM9_ANDERS_TP_2025-10-24_18-53-43.fit', 248.699],
+    ] as const) {
+      const tl = buildTimeline(parseFitRecords(fs.readFileSync(`${fixturesDir}${file}`)))
+      const det = detectRace(tl, officialTimeS)
+      const laps = constructLaps(tl, det, officialTimeS)
+      const halfBoundaries = constructHalfLaps(tl, det, laps)
+      const halves = halfLapTimes(halfBoundaries)
+
+      expect(halves).toHaveLength(32)
+      expect(halves.every((h) => h > 0)).toBe(true)
+
+      // Every pair of half-laps should sum to its parent full lap (same boundaries, just
+      // split at the midpoint) — a direct consistency check on the calibration reuse.
+      for (let ln = 0; ln < 16; ln++) {
+        const fullLapTimeS = laps.lapBoundaryTimes[ln + 1] - laps.lapBoundaryTimes[ln]
+        expect(halves[2 * ln] + halves[2 * ln + 1]).toBeCloseTo(fullLapTimeS, 6)
+      }
+    }
   })
 })
 

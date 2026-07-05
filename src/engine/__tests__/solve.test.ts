@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { simulate } from '../simulate'
+import { defaultStartPower, simulate } from '../simulate'
 import {
   bisect,
   solveCdaForTime,
@@ -7,6 +7,7 @@ import {
   solveMassForTime,
   solvePowerForTime,
   solveRhoForTime,
+  solveTemplatePowerForTime,
   wattsToWin,
 } from '../solve'
 import type { SolveBase } from '../solve'
@@ -48,6 +49,16 @@ describe('inverse solvers round-trip against the sim (SPEC §4.11)', () => {
   })
   it('solveRhoForTime recovers the density that produced T0', () => {
     expect(solveRhoForTime(T0, base)).toBeCloseTo(1.122, 3)
+  })
+})
+
+describe('solveTemplatePowerForTime (SPEC §4.10/§4.11 — owner-shaped start template)', () => {
+  it('recovers the steady-power level that produced a template-shaped target time', () => {
+    const templateBase: SolveBase = { power: defaultStartPower(450), cdaM2: 0.21, rho, params, track, v0: 0.5 }
+    const targetTime = simulate(templateBase).finishTimeS
+    const steadyW = solveTemplatePowerForTime(targetTime, templateBase)
+    expect(steadyW).toBeCloseTo(450, 1)
+    expect(simulate({ ...templateBase, power: defaultStartPower(steadyW) }).finishTimeS).toBeCloseTo(targetTime, 1)
   })
 })
 

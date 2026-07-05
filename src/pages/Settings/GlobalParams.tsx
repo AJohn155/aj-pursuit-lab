@@ -4,7 +4,7 @@ import { DEFAULT_SETTINGS_VALUES, SETTINGS_ID, withSettingsDefaults, type Settin
 import { useCollection } from '../../store/useCollection'
 
 const FIELDS: {
-  key: keyof typeof DEFAULT_SETTINGS_VALUES
+  key: Exclude<keyof typeof DEFAULT_SETTINGS_VALUES, 'gearInventory'>
   label: string
   provenance: string
   step: string
@@ -84,7 +84,7 @@ export default function GlobalParams() {
 function GlobalParamsForm({ settings }: { settings: Settings }) {
   const [draft, setDraft] = useState<Settings>(settings)
 
-  function handleChange(key: keyof typeof DEFAULT_SETTINGS_VALUES, value: string) {
+  function handleChange(key: Exclude<keyof typeof DEFAULT_SETTINGS_VALUES, 'gearInventory'>, value: string) {
     const num = Number(value)
     setDraft((prev) => (prev ? { ...prev, [key]: Number.isNaN(num) ? 0 : num } : prev))
   }

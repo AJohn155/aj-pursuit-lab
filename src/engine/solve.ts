@@ -4,7 +4,7 @@
 // given the others, using the §4.10 forward simulator. Finish time is monotonic in each
 // of these (more power → faster; more CdA/crr/mass/rho → slower), so bisection is robust.
 
-import { simulate } from './simulate'
+import { defaultStartPower, simulate } from './simulate'
 import type { SimInput } from './simulate'
 
 export interface BisectOptions {
@@ -74,6 +74,23 @@ export function solvePowerForTime(
   opts?: BisectOptions,
 ): number {
   return bisect((p) => simTime(base, { power: p }), targetTimeS, bracket[0], bracket[1], opts)
+}
+
+/**
+ * Solve the steady-power level for the owner-shaped standing-start template
+ * (`defaultStartPower`, §4.10) to hit a target finish time — same idea as
+ * `solvePowerForTime` but preserves the start-ramp shape instead of flattening to a
+ * constant. Used by Pacing's ghost builder and Race Day's required-schedule output
+ * (§5.6/§5.7), both of which want "what steady power, ridden with a normal start shape,
+ * gets me to time X" rather than a flat target.
+ */
+export function solveTemplatePowerForTime(
+  targetTimeS: number,
+  base: SolveBase,
+  bracket: [number, number] = [150, 800],
+  opts?: BisectOptions,
+): number {
+  return bisect((w) => simTime(base, { power: defaultStartPower(w) }), targetTimeS, bracket[0], bracket[1], opts)
 }
 
 /** Solve CdA (m²) to hit a target finish time (the ΔCdA-to-win alternative, §4.11). */

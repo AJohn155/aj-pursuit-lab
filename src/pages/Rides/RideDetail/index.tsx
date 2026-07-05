@@ -12,7 +12,7 @@
 // data mid-sync.
 
 import { useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { ENGINE_VERSION } from '../../../engine/constants'
 import type { FullRideAnalysis } from '../../../engine/ingest'
 import { dataStore } from '../../../store/DataStore'
@@ -97,6 +97,12 @@ export default function RideDetail() {
               Cached analysis is from an older engine version
             </span>
           )}
+          <Link
+            to={`/calculators?tab=cadence&chainring=${ride.gear.chainring}&cog=${ride.gear.cog}`}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Cadence for {ride.gear.chainring}×{ride.gear.cog}
+          </Link>
           <button
             type="button"
             onClick={() => void handleSaveRecomputed()}
