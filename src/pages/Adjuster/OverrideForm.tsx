@@ -4,6 +4,7 @@
 
 import type { ResolvedScenario } from '../../store/scenario'
 import type { Ride, Venue } from '../../store/types'
+import { BADGE_CLASSES, qualityBadgeForScore } from '../Rides/format'
 
 const inputClass = 'mt-1 block w-full rounded-md border border-slate-300 px-2 py-1 text-sm'
 const labelClass = 'block text-sm'
@@ -35,6 +36,7 @@ export interface OverrideFormProps extends OverrideFormState {
 export default function OverrideForm(props: OverrideFormProps) {
   const { rides, venues, baselineSnapshot, onChange } = props
   const isBlank = props.baselineRef === 'blank'
+  const selectedRide = !isBlank ? rides.find((r) => r.id === props.baselineRef) : undefined
 
   return (
     <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
@@ -56,6 +58,13 @@ export default function OverrideForm(props: OverrideFormProps) {
               </option>
             ))}
         </select>
+        {selectedRide?.analysis && (
+          <span
+            className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${BADGE_CLASSES[qualityBadgeForScore(selectedRide.analysis.qualityScore)]}`}
+          >
+            Quality {Math.round(selectedRide.analysis.qualityScore)}
+          </span>
+        )}
       </label>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

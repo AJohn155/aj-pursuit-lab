@@ -8,6 +8,7 @@ import { resolveScenario, resolveScenarioBaseline } from '../../store/scenario'
 import type { ResolvedScenario, ScenarioBaseline } from '../../store/scenario'
 import { SETTINGS_ID, withSettingsDefaults } from '../../store/types'
 import { useCollection } from '../../store/useCollection'
+import { BADGE_CLASSES, qualityBadgeForScore } from '../Rides/format'
 import GhostBuilder from './GhostBuilder'
 import OptimalityPanel from './OptimalityPanel'
 
@@ -39,6 +40,8 @@ export default function Pacing() {
 
   if (!settings) return <p className="text-sm text-slate-500">Loading…</p>
 
+  const selectedRide = baselineRef !== 'blank' ? rides.find((r) => r.id === baselineRef) : undefined
+
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold text-slate-900">Pacing</h1>
@@ -60,6 +63,13 @@ export default function Pacing() {
                 </option>
               ))}
           </select>
+          {selectedRide?.analysis && (
+            <span
+              className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${BADGE_CLASSES[qualityBadgeForScore(selectedRide.analysis.qualityScore)]}`}
+            >
+              Quality {Math.round(selectedRide.analysis.qualityScore)}
+            </span>
+          )}
         </label>
       </section>
 

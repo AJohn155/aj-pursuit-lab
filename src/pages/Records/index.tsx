@@ -7,6 +7,7 @@ import { analyzeStoredRide } from '../../store/analyzeStoredRide'
 import { dataStore } from '../../store/DataStore'
 import { SETTINGS_ID, withSettingsDefaults } from '../../store/types'
 import { useCollection } from '../../store/useCollection'
+import { BADGE_CLASSES, qualityBadgeForScore } from '../Rides/format'
 import { buildRideRecordStats, computeRecords } from './records'
 import type { RideRecordStats } from './records'
 
@@ -85,6 +86,13 @@ export default function Records() {
                     <Link to={`/rides/${r.ride.id}`} className="text-slate-600 hover:underline">
                       {r.detail ?? `${r.ride.eventName || 'Untitled ride'} — ${r.ride.date}`}
                     </Link>
+                    {r.ride.analysis && (
+                      <span
+                        className={`ml-2 rounded-full px-1.5 py-0.5 text-xs font-medium ${BADGE_CLASSES[qualityBadgeForScore(r.ride.analysis.qualityScore)]}`}
+                      >
+                        {Math.round(r.ride.analysis.qualityScore)}
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}

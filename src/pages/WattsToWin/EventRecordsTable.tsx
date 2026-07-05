@@ -11,6 +11,7 @@ import { useMemo } from 'react'
 import { analyzeStoredRide } from '../../store/analyzeStoredRide'
 import { resolveScenario, runScenario, solveScenarioUnknown } from '../../store/scenario'
 import type { ResolvedScenario } from '../../store/scenario'
+import { BADGE_CLASSES, qualityBadgeForScore } from '../Rides/format'
 import type { Event, Ride, Settings, Venue } from '../../store/types'
 
 const POWER_STEPS_W = [10, 20, 30]
@@ -69,8 +70,15 @@ export default function EventRecordsTable({
     <div className="space-y-6">
       {rows.map(({ ride, resolvedBaseline, error }) => (
         <section key={ride.id} className="rounded-xl border border-slate-200 bg-white p-4">
-          <h3 className="mb-2 text-sm font-semibold text-slate-900">
+          <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900">
             {ride.eventName || 'Untitled ride'} — {ride.date} · {ride.officialTimeS.toFixed(3)}s
+            {ride.analysis && (
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-medium ${BADGE_CLASSES[qualityBadgeForScore(ride.analysis.qualityScore)]}`}
+              >
+                {Math.round(ride.analysis.qualityScore)}
+              </span>
+            )}
           </h3>
           {error && <p className="text-sm text-red-700">Can't analyze this ride: {error}</p>}
           {resolvedBaseline && (

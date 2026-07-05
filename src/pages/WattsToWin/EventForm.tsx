@@ -3,6 +3,7 @@
 
 import { useState } from 'react'
 import type { FormEvent } from 'react'
+import { BADGE_CLASSES, qualityBadgeForScore } from '../Rides/format'
 import type { Event, Ride, Venue } from '../../store/types'
 
 function newEventId(): string {
@@ -139,6 +140,13 @@ export default function EventForm({
             <label key={r.id} className="flex items-center gap-2 py-1 text-sm">
               <input type="checkbox" checked={myRideIds.includes(r.id)} onChange={() => toggleRide(r.id)} />
               {r.eventName || 'Untitled ride'} — {r.date} ({r.officialTimeS.toFixed(3)}s)
+              {r.analysis && (
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-xs font-medium ${BADGE_CLASSES[qualityBadgeForScore(r.analysis.qualityScore)]}`}
+                >
+                  {Math.round(r.analysis.qualityScore)}
+                </span>
+              )}
             </label>
           ))}
         </div>

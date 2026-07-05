@@ -118,6 +118,7 @@ export default function RaceDay() {
   }
 
   if (!settings) return <p className="text-sm text-slate-500">Loading…</p>
+  if (venues.length === 0) return <p className="text-sm text-slate-500">Add a venue in Settings first.</p>
 
   return (
     <div className="space-y-4">

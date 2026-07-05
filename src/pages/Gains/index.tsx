@@ -8,7 +8,7 @@ import type { ResolvedScenario } from '../../store/scenario'
 import { dataStore } from '../../store/DataStore'
 import { SETTINGS_ID, withSettingsDefaults } from '../../store/types'
 import { useCollection } from '../../store/useCollection'
-import { weightedAvgPower } from '../Rides/format'
+import { BADGE_CLASSES, qualityBadgeForScore, weightedAvgPower } from '../Rides/format'
 import { buildIsochroneGrid, computeGainsRows } from './gains'
 import type { RidePoint } from './gains'
 import IsochroneChart from './IsochroneChart'
@@ -105,10 +105,27 @@ export default function Gains() {
               </optgroup>
             )}
           </select>
+          {baselineKey.startsWith('ride:') &&
+            (() => {
+              const r = rides.find((x) => `ride:${x.id}` === baselineKey)
+              return r?.analysis ? (
+                <span
+                  className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${BADGE_CLASSES[qualityBadgeForScore(r.analysis.qualityScore)]}`}
+                >
+                  Quality {Math.round(r.analysis.qualityScore)}
+                </span>
+              ) : null
+            })()}
         </label>
       </section>
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+
+      {!baselineKey && !error && (
+        <p className="text-sm text-slate-500">
+          Pick a baseline above to see the marginal-gains tornado chart and isochrone grid.
+        </p>
+      )}
 
       {baseline && rows.length > 0 && (
         <>

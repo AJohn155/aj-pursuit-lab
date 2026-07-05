@@ -3,6 +3,7 @@
 // ordered array rather than a Set — checking a box appends to the end, unchecking removes.
 
 import type { Ride, Venue } from '../../store/types'
+import { BADGE_CLASSES, qualityBadgeForScore } from '../Rides/format'
 import { colorFor } from './compare'
 
 export default function RideSelector({
@@ -55,6 +56,15 @@ export default function RideSelector({
                   </td>
                   <td className="px-3 py-2 text-slate-600">{ride.date}</td>
                   <td className="px-3 py-2 text-slate-600">{ride.officialTimeS.toFixed(3)}s</td>
+                  <td className="px-3 py-2">
+                    {ride.analysis && (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${BADGE_CLASSES[qualityBadgeForScore(ride.analysis.qualityScore)]}`}
+                      >
+                        {Math.round(ride.analysis.qualityScore)}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-xs text-slate-500">
                     {selected ? (idx === 0 ? 'Reference' : `#${idx + 1}`) : ''}
                   </td>
