@@ -56,6 +56,7 @@ export default function Compare() {
             color: colorFor(i),
             full,
             lapLengthM: venue.lapLengthM,
+            officialSplits: ride.officialSplits,
           })
         } catch (e) {
           errors.push(`${ride.eventName || 'Ride'}: ${e instanceof Error ? e.message : String(e)}`)

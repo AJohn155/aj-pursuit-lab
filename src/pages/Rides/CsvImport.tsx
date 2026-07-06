@@ -225,11 +225,15 @@ export default function CsvImport() {
                   className={`mt-1 block w-full ${selectClass}`}
                 >
                   <option value={NONE}>— none —</option>
-                  {parsed.headers.map((h) => (
-                    <option key={h} value={h}>
-                      {h}
-                    </option>
-                  ))}
+                  {/* Index keys + blank-header filtering: the owner sheet has empty spacer
+                      columns, and duplicate ''-keys made React spam duplicate-key errors. */}
+                  {parsed.headers.map((h, hi) =>
+                    h.trim() === '' ? null : (
+                      <option key={hi} value={h}>
+                        {h}
+                      </option>
+                    ),
+                  )}
                 </select>
               </label>
             ))}
@@ -240,19 +244,21 @@ export default function CsvImport() {
               Per-lap split columns (check, in order — first lap is the start time)
             </p>
             <div className="flex flex-wrap gap-3 text-sm text-slate-600">
-              {parsed.headers.map((h) => (
-                <label key={h} className="flex items-center gap-1">
-                  <input
-                    type="checkbox"
-                    checked={mapping.lapSplitCols.includes(h)}
-                    onChange={() => toggleLapSplitCol(h)}
-                  />
-                  {h}
-                  {mapping.lapSplitCols.includes(h) && (
-                    <span className="text-xs text-slate-400">#{mapping.lapSplitCols.indexOf(h) + 1}</span>
-                  )}
-                </label>
-              ))}
+              {parsed.headers.map((h, hi) =>
+                h.trim() === '' ? null : (
+                  <label key={hi} className="flex items-center gap-1">
+                    <input
+                      type="checkbox"
+                      checked={mapping.lapSplitCols.includes(h)}
+                      onChange={() => toggleLapSplitCol(h)}
+                    />
+                    {h}
+                    {mapping.lapSplitCols.includes(h) && (
+                      <span className="text-xs text-slate-400">#{mapping.lapSplitCols.indexOf(h) + 1}</span>
+                    )}
+                  </label>
+                ),
+              )}
             </div>
           </div>
 

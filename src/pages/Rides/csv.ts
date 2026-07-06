@@ -3,12 +3,45 @@
 // spreadsheet export, and this keeps the app dependency-free for a narrow, personal need.
 
 /**
- * Parse CSV/TSV text (handles double-quoted fields, escaped "" quotes, and delimiters
- * inside quotes). The delimiter is auto-detected: a tab anywhere in the text means a
+ * Parse CSV/TSV text. The delimiter is auto-detected: a tab anywhere in the text means a
  * spreadsheet paste (Google Sheets/Excel copy out tab-separated), otherwise comma.
+ *
+ * The two formats get DIFFERENT quote handling on purpose. Comma CSV uses strict
+ * RFC-style quoting (quoted fields may contain commas/newlines). Tab pastes use lenient
+ * quoting: rows always split on newlines and cells on tabs, and quotes are just stripped
+ * when they wrap a cell (or dangle at a row's edge). Strict quoting on a TSV paste is
+ * what silently swallowed the owner's entire data row into one field when the paste
+ * carried a stray wrapping quote (2026-07) — in a spreadsheet paste, structure comes from
+ * tabs/newlines, never from quotes.
  */
 export function parseCsv(text: string): string[][] {
-  const delim = text.includes('\t') ? '\t' : ','
+  return text.includes('\t') ? parseTsv(text) : parseStrictCsv(text)
+}
+
+function parseTsv(text: string): string[][] {
+  return text
+    .split(/\r?\n/)
+    .filter((line) => line.trim() !== '')
+    .map((line) => {
+      const cells = line.split('\t').map((cell) => {
+        if (cell.length >= 2 && cell.startsWith('"') && cell.endsWith('"')) {
+          return cell.slice(1, -1).replaceAll('""', '"')
+        }
+        return cell
+      })
+      // A row that was wrapped in quotes as a whole leaves one dangling quote at each
+      // end — strip those too.
+      if (cells.length > 1) {
+        if (cells[0].startsWith('"') && !cells[0].endsWith('"')) cells[0] = cells[0].slice(1)
+        const last = cells[cells.length - 1]
+        if (last.endsWith('"') && !last.startsWith('"')) cells[cells.length - 1] = last.slice(0, -1)
+      }
+      return cells
+    })
+}
+
+function parseStrictCsv(text: string): string[][] {
+  const delim = ','
   const rows: string[][] = []
   let row: string[] = []
   let field = ''
@@ -129,10 +162,12 @@ export function normalizeDateString(raw: string): string | null {
     return `${year}-${us[1].padStart(2, '0')}-${us[2].padStart(2, '0')}`
   }
 
-  const dmy = s.match(/^(\d{1,2})\s+([A-Za-z]{3,})\.?,?\s+(\d{4})$/)
+  // "24 Oct 2025", "24-Oct-25" (the owner's sheet uses the dashed 2-digit-year form).
+  const dmy = s.match(/^(\d{1,2})[-\s]([A-Za-z]{3,})\.?,?[-\s](\d{2,4})$/)
   if (dmy) {
     const m = MONTHS[dmy[2].slice(0, 3).toLowerCase()]
-    if (m) return `${dmy[3]}-${String(m).padStart(2, '0')}-${dmy[1].padStart(2, '0')}`
+    const year = dmy[3].length === 2 ? `20${dmy[3]}` : dmy[3]
+    if (m) return `${year}-${String(m).padStart(2, '0')}-${dmy[1].padStart(2, '0')}`
   }
   const mdy = s.match(/^([A-Za-z]{3,})\.?\s+(\d{1,2}),?\s+(\d{4})$/)
   if (mdy) {
@@ -184,12 +219,15 @@ export function detectOwnerSheet(headers: string[]): OwnerSheetMapping | null {
 }
 
 /** Case-insensitive venue match: exact name first, then contains in either direction
- * ("Santiago" ↔ "Peñalolén (Santiago)"). */
+ * ("Santiago" ↔ "Peñalolén (Santiago)"), then the same per comma-separated part so
+ * "Santiago, CH" still lands on "Peñalolén (Santiago)". */
 export function matchVenueName<T extends { name: string }>(name: string, venues: T[]): T | undefined {
-  const n = name.trim().toLowerCase()
-  if (n === '') return undefined
-  return (
-    venues.find((v) => v.name.toLowerCase() === n) ??
-    venues.find((v) => v.name.toLowerCase().includes(n) || n.includes(v.name.toLowerCase()))
-  )
+  const candidates = [name, ...name.split(',')].map((s) => s.trim().toLowerCase()).filter((s) => s.length >= 3)
+  for (const n of candidates) {
+    const hit =
+      venues.find((v) => v.name.toLowerCase() === n) ??
+      venues.find((v) => v.name.toLowerCase().includes(n) || n.includes(v.name.toLowerCase()))
+    if (hit) return hit
+  }
+  return undefined
 }

@@ -175,3 +175,58 @@ describe('parseSplitsText (2026-07 item 16)', () => {
     expect(parseSplitsText('  ')).toEqual({ splits: [], error: null })
   })
 })
+
+describe("owner's real 2025 Worlds quali paste (2026-07 bug: 'Import 0 rows')", () => {
+  const HEADER = OWNER_HEADER
+  const DATA_CELLS = [
+    '2025 World Champs Quali', '24-Oct-25', 'Santiago, CH', '1.122', '65x15', '4:06.793',
+    '21.179', '15.04', '500', '', '460', '65.679', '59.973', '60.284', '60.857', '',
+    '2:05.652', '3:05.936', '',
+    '21.179', '14.715', '14.808', '14.977', '15.138', '15.05', '14.982', '14.803',
+    '14.904', '15.052', '15.15', '15.178', '15.205', '15.176', '15.207', '15.269',
+    '246.793', '1.15', '248.8290979', '',
+    'Short Velotoze booties, Vorteq full custom USA - pushed through the corner after lap 1.',
+  ]
+
+  function expectParsedOk(text: string) {
+    const { headers, records } = csvToRecords(parseCsv(text))
+    expect(records).toHaveLength(1)
+    const m = detectOwnerSheet(headers)
+    expect(m).not.toBeNull()
+    const rec = records[0]
+    expect(rec[m!.date]).toContain('24-Oct-25')
+    expect(normalizeDateString(rec[m!.date].replace(/^"/, ''))).toBe('2025-10-24')
+    expect(rec[m!.gearing]).toBe('65x15')
+    expect(parseTimeToSeconds(rec[m!.overallTime])!).toBeCloseTo(246.793, 3)
+    const laps = m!.lapCols.map((c) => parseTimeToSeconds(rec[c] ?? ''))
+    expect(laps).toHaveLength(16)
+    expect(laps[0]).toBeCloseTo(21.179, 3)
+    expect(laps[15]).toBeCloseTo(15.269, 3)
+    expect(laps.reduce((s, x) => s! + x!, 0)!).toBeCloseTo(246.793, 2)
+  }
+
+  it('parses a clean two-line paste', () => {
+    expectParsedOk(HEADER + '\n' + DATA_CELLS.join('\t'))
+  })
+
+  it('parses when the data row arrives wrapped in a stray quote pair (the real clipboard)', () => {
+    // This is what actually came out of the sheet: the whole data row wrapped in quotes.
+    // The old strict-CSV quoting swallowed every tab (and even the newline when the quote
+    // opened on the header line) into one giant field -> "Import 0 rows".
+    expectParsedOk(HEADER + '\n"' + DATA_CELLS.join('\t') + '"')
+  })
+
+  it('parses even when the opening quote sits at the end of the header line', () => {
+    const { records } = csvToRecords(parseCsv(HEADER + ' "\n' + DATA_CELLS.join('\t') + '"'))
+    expect(records).toHaveLength(1)
+  })
+
+  it('matches "Santiago, CH" to the Peñalolén venue', () => {
+    expect(matchVenueName('Santiago, CH', [{ name: 'Peñalolén (Santiago)' }])?.name).toBe('Peñalolén (Santiago)')
+  })
+
+  it('normalizes the dashed 2-digit-year date form', () => {
+    expect(normalizeDateString('24-Oct-25')).toBe('2025-10-24')
+    expect(normalizeDateString('3-Feb-26')).toBe('2026-02-03')
+  })
+})

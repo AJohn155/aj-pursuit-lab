@@ -429,3 +429,21 @@ Owner asked for a redesign taking the light-mode version of a Dribbble reference
 **Test status:** `npm test` 218/218; `tsc -b`, `npm run build`, `npm run lint` all clean. Live-verified in the browser at 1280 px and 375 px (fresh mobile load confirms charts fit; the reference look confirmed by screenshot against the shot). Zero console errors.
 
 **Notes:** light only by owner choice — no dark mode and no CSS-variable indirection for a future one (owner explicitly picked "light only" over "dark-ready"). The shot's decorative elements (glassmorphism glows, upgrade card, AI copy) were deliberately not imitated; this pass takes its palette, surfaces, and component shapes.
+
+---
+
+## 2026-07-05 — Owner feedback round 2: paste bug, rolling-CdA noise, official-split anchoring
+
+**Model:** Claude (Fable 5), via Claude Code CLI
+
+Owner reported the history-sheet paste giving "Import 0 rows" (with his exact clipboard content supplied), asked why the 2-lap rolling CdA is still spiky, how to add official splits, and asked that ride comparisons use official time at lap 1 / lap boundaries.
+
+**Paste bug (root-caused with the owner's real clipboard):** the paste carried a stray quote wrapping the data row; the strict CSV quote parser treated it as an opening quote and swallowed every tab (and the row newline, when the quote landed on the header line) into one giant field → zero data rows. Fix: tab-delimited pastes now get their own lenient parser — rows always split on newlines, cells on tabs, quotes merely stripped when wrapping a cell or dangling at row edges (in a spreadsheet paste, structure comes from tabs/newlines, never quotes); strict RFC quoting is kept for comma CSVs. The same clipboard exposed two more gaps, both fixed: `24-Oct-25` date form (dashed, 2-digit year) and "Santiago, CH" venue matching (comma-part fuzzy match). Regression tests use the owner's exact row in three variants (clean, quote-wrapped row, quote opening on the header line); live-verified in the real import UI — "Import 1 row" with correct date/venue/gear/16 laps. Also fixed React duplicate-key spam from the sheet's blank spacer columns in the mapping UI (index keys, blank headers skipped).
+
+**Rolling CdA spikiness (explained + damped):** the window's ΔKE term uses single 1 Hz boundary samples and scales as mEff·v·Δv — at 16.5 m/s a 0.1 m/s edge-sample wobble is ~±0.002 m² of CdA in a 2-lap window, and the reference speed genuinely oscillates ±0.4 m/s through the corners. New `edgeSmoothSamples` option on `energyBalanceCda` (default 1 = exact spec form — the gated cdaRace/per-lap paths are untouched); the rolling diagnostic passes 5, averaging each boundary over ~5 s. Unit tests: no-op on constant speed; ≥3× error reduction for a noisy edge sample.
+
+**Official-split anchoring (Compare + Pacing ghost overlay):** `buildDistanceTimeSeries` now accepts the ride's official per-lap splits and affinely re-anchors each lap of the reconstructed series so elapsed time at every lap line equals the official cumulative split — the within-lap shape still comes from the timeline, but lap-line gaps are exactly the official gaps, which removes the ±1 s start-anchor residual from lap 1 of the gap chart. Applied in Compare (rides with splits; scenarios and split-less rides fall back unchanged, caption says which) and the ghost-builder overlay. Degenerate/nonsense splits are ignored rather than corrupting the series. The Adjuster's scenario-vs-baseline overlay deliberately stays unanchored — both of its curves share sim conventions, and mixing anchored/unanchored there would inject the reproduction bias into the delta.
+
+**Splits how-to (owner question, no code needed):** official splits go in via ride detail → "Edit details" → the splits textarea (per-lap or cumulative both parse), or at upload time in the metadata form; the CSV/paste import maps Lap 1–16 automatically.
+
+**Test status:** `npm test` **228/228** (10 new); `tsc -b`, `npm run build`, `npm run lint` clean; paste flow live-verified with zero console errors.

@@ -61,7 +61,10 @@ export default function GhostBuilder({
     if (!rideVenue) return null
     try {
       const full = analyzeStoredRide(overlayRide, rideVenue, settings)
-      return buildDistanceTimeSeries(full)
+      return buildDistanceTimeSeries(full, {
+        officialSplits: overlayRide.officialSplits,
+        lapLengthM: rideVenue.lapLengthM,
+      })
     } catch {
       return null
     }

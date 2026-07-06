@@ -29,6 +29,14 @@ export interface CdaInput {
   track: TrackModel
   /** Standing-start energy (J), added to E_in only when the window covers the start (§4.6). */
   startEnergyJ?: number
+  /**
+   * Boundary speeds for the ΔKE term averaged over this many samples at each window edge
+   * (default 1 = exact spec form, used by the gated cdaRace/per-lap paths). The rolling
+   * diagnostic passes >1: ΔKE goes as v·Δv, so a single noisy 1 Hz edge sample is worth
+   * ~0.002 m² of CdA in a 2-lap window — most of its visible spikiness (owner question
+   * 2026-07).
+   */
+  edgeSmoothSamples?: number
 }
 
 export interface CdaBreakdown {
@@ -52,14 +60,16 @@ export interface CdaBreakdown {
  * (and the worked example) can show where the energy goes, not just the final CdA.
  */
 export function energyBalanceCda(input: CdaInput): CdaBreakdown {
-  const { samples, rho, params, track, startEnergyJ = 0 } = input
+  const { samples, rho, params, track, startEnergyJ = 0, edgeSmoothSamples = 1 } = input
   if (samples.length === 0) throw new Error('energyBalanceCda: empty sample window')
 
   const mEff = effectiveInertialMass(params)
   const eta = params.mechEfficiency
 
-  const vComStart = samples[0].vCom
-  const vComEnd = samples[samples.length - 1].vCom
+  const n = Math.max(1, Math.min(edgeSmoothSamples, Math.floor(samples.length / 2)))
+  const mean = (arr: Sample[]) => arr.reduce((s, x) => s + x.vCom, 0) / arr.length
+  const vComStart = mean(samples.slice(0, n))
+  const vComEnd = mean(samples.slice(samples.length - n))
 
   let eIn = startEnergyJ
   let eRoll = 0
@@ -187,7 +197,9 @@ export function cdaRolling(
       if (distCumM[i] >= lo && distCumM[i] < hi) windowSamples.push(samples[i])
     }
     if (windowSamples.length < 2) continue
-    const cdaM2 = energyBalanceCda({ samples: windowSamples, rho, params, track }).cdaM2
+    // Edge smoothing (5 samples ≈ 5 s) damps the boundary-ΔKE noise that dominates short
+    // windows — see edgeSmoothSamples on CdaInput. Display-only path.
+    const cdaM2 = energyBalanceCda({ samples: windowSamples, rho, params, track, edgeSmoothSamples: 5 }).cdaM2
     points.push({ centerDistM: center, cdaM2 })
   }
   return points

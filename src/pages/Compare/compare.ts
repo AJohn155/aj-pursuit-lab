@@ -23,6 +23,9 @@ export interface CompareItem {
   color: string
   full: FullRideAnalysis
   lapLengthM: number
+  /** The ride's official per-lap splits, when it has them — the gap chart anchors its
+   * elapsed times on these (owner request 2026-07). Absent for scenarios. */
+  officialSplits?: number[]
 }
 
 /** Cumulative calibrated (datum) distance vs elapsed race time, 1 Hz, whole race. */
@@ -35,8 +38,18 @@ export interface DistanceTimeSeries {
  * Builds a monotonic distance→elapsed-time series for the gap chart, mirroring
  * `raceSampleSeries` (engine/ingest/laps.ts) but keeping elapsed time instead of discarding
  * it — that function only returns cumulative distance per sample.
+ *
+ * When the ride carries official per-lap splits, the series is re-anchored onto them
+ * (owner request 2026-07): within each lap the reconstructed timeline still provides the
+ * shape, but it's affinely stretched so the elapsed time at every lap line equals the
+ * official cumulative split. Lap 1 in particular is otherwise polluted by the ±1 s
+ * start-anchor detection residual; with splits present, the gap at any lap line is exactly
+ * the official-time gap.
  */
-export function buildDistanceTimeSeries(full: FullRideAnalysis): DistanceTimeSeries {
+export function buildDistanceTimeSeries(
+  full: FullRideAnalysis,
+  opts: { officialSplits?: number[]; lapLengthM?: number } = {},
+): DistanceTimeSeries {
   const { timeline, laps, detection } = full.base
   const { t, d } = timeline
   const c = laps.calibrationInterior
@@ -50,7 +63,31 @@ export function buildDistanceTimeSeries(full: FullRideAnalysis): DistanceTimeSer
     distM.push(c * (interpAt(t, d, tt) - d0))
     elapsedS.push(tt - detection.t0)
   }
-  return { distM, elapsedS }
+  const series = { distM, elapsedS }
+
+  const splits = opts.officialSplits
+  if (!splits || splits.length < 2 || splits.some((s) => !Number.isFinite(s) || s <= 0)) return series
+  const L = opts.lapLengthM ?? 250
+
+  const official: number[] = [0]
+  let acc = 0
+  for (const s of splits) {
+    acc += s
+    official.push(acc)
+  }
+  // Reconstructed elapsed time at each lap line; bail out (unanchored) if the
+  // reconstruction is degenerate rather than divide by a non-positive span.
+  const recon = official.map((_, i) => timeAtDistance(series, i * L))
+  for (let i = 1; i < recon.length; i++) {
+    if (!(recon[i] > recon[i - 1])) return series
+  }
+
+  const remapped = elapsedS.map((tt, i) => {
+    const lap = Math.max(0, Math.min(splits.length - 1, Math.floor(distM[i] / L)))
+    const scale = (official[lap + 1] - official[lap]) / (recon[lap + 1] - recon[lap])
+    return official[lap] + (tt - recon[lap]) * scale
+  })
+  return { distM, elapsedS: remapped }
 }
 
 /** Linear-interpolates elapsed time at an arbitrary cumulative distance. Clamps to ends. */

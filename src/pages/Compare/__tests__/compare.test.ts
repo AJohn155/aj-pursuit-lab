@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { gapCharts, speedPositionAverage, timeAtDistance } from '../compare'
+import { buildDistanceTimeSeries, gapCharts, speedPositionAverage, timeAtDistance } from '../compare'
 import type { DistanceTimeSeries } from '../compare'
 
 describe('timeAtDistance', () => {
@@ -47,5 +47,52 @@ describe('speedPositionAverage', () => {
     const nearStart = speedMs[posM.findIndex((p) => p < 20)]
     expect(nearStart).toBeCloseTo(15, 6)
     expect(speedMs.every((v) => v !== 999)).toBe(true)
+  })
+})
+
+describe('official-split anchoring (owner request 2026-07)', () => {
+  // A synthetic reconstructed series: 4 laps of 250 m ridden at a constant reconstructed
+  // 15.0 s/lap, but with OFFICIAL splits that differ (the reconstruction carries the
+  // start-anchor error; officials are ground truth at the lap lines).
+  function syntheticFull(elapsedPerLapS: number) {
+    const t: number[] = []
+    const d: number[] = []
+    const n = Math.ceil(4 * elapsedPerLapS)
+    const speed = 250 / elapsedPerLapS
+    for (let s = 0; s <= n; s++) {
+      t.push(s)
+      d.push(s * speed)
+    }
+    return {
+      base: {
+        timeline: { t, d },
+        laps: { calibrationInterior: 1, d0: 0, lapBoundaryTimes: [0, n] },
+        detection: { t0: 0 },
+      },
+    } as never
+  }
+
+  it('elapsed time at every lap line equals the official cumulative split', () => {
+    const officialSplits = [21.0, 14.5, 14.8, 14.7]
+    const series = buildDistanceTimeSeries(syntheticFull(15), { officialSplits, lapLengthM: 250 })
+    let cum = 0
+    for (let lap = 1; lap <= 4; lap++) {
+      cum += officialSplits[lap - 1]
+      expect(timeAtDistance(series, lap * 250)).toBeCloseTo(cum, 2)
+    }
+    // Within-lap times stay monotonic.
+    for (let i = 1; i < series.elapsedS.length; i++) {
+      expect(series.elapsedS[i]).toBeGreaterThan(series.elapsedS[i - 1])
+    }
+  })
+
+  it('without splits the series is unchanged', () => {
+    const plain = buildDistanceTimeSeries(syntheticFull(15))
+    expect(timeAtDistance(plain, 1000)).toBeCloseTo(60, 1)
+  })
+
+  it('nonsense splits are ignored rather than corrupting the series', () => {
+    const series = buildDistanceTimeSeries(syntheticFull(15), { officialSplits: [21, -3, 15, 15], lapLengthM: 250 })
+    expect(timeAtDistance(series, 1000)).toBeCloseTo(60, 1)
   })
 })

@@ -174,3 +174,33 @@ describe('cdaRolling (SPEC §4.9 display-only diagnostic)', () => {
     expect(cdaRolling([], [], 1.15, params, track)).toEqual([])
   })
 })
+
+describe('edgeSmoothSamples (rolling-CdA boundary noise, owner question 2026-07)', () => {
+  it('is a no-op on constant-speed data and defaults to the exact spec form', async () => {
+    const { energyBalanceCda } = await import('../cda')
+    const { makeTrack } = await import('../track')
+    const track = makeTrack(250, 23)
+    const params = { massKg: 100, rotatingMassEqKg: 1, crrEff: 0.0014, mechEfficiency: 0.98, comHeightM: 1.1 }
+    const v = 16.5
+    const power = (0.5 * 0.19 * 1.15 * v ** 3 + 100 * 9.81 * 0.0014 * v) / 0.98
+    const samples = Array.from({ length: 60 }, (_, i) => ({ dt: 1, powerW: power, vCom: v, s: (i * v) % 250 }))
+    const exact = energyBalanceCda({ samples, rho: 1.15, params, track })
+    const smoothed = energyBalanceCda({ samples, rho: 1.15, params, track, edgeSmoothSamples: 5 })
+    expect(smoothed.cdaM2).toBeCloseTo(exact.cdaM2, 10)
+  })
+
+  it('damps the CdA error from a single noisy boundary sample', async () => {
+    const { energyBalanceCda } = await import('../cda')
+    const { makeTrack } = await import('../track')
+    const track = makeTrack(250, 23)
+    const params = { massKg: 100, rotatingMassEqKg: 1, crrEff: 0.0014, mechEfficiency: 0.98, comHeightM: 1.1 }
+    const v = 16.5
+    const power = (0.5 * 0.19 * 1.15 * v ** 3 + 100 * 9.81 * 0.0014 * v) / 0.98
+    const samples = Array.from({ length: 60 }, (_, i) => ({ dt: 1, powerW: power, vCom: v, s: (i * v) % 250 }))
+    samples[59] = { ...samples[59], vCom: v + 0.3 } // one noisy edge sample
+    const clean = energyBalanceCda({ samples: samples.map((s) => ({ ...s, vCom: v })), rho: 1.15, params, track }).cdaM2
+    const noisyExact = energyBalanceCda({ samples, rho: 1.15, params, track }).cdaM2
+    const noisySmoothed = energyBalanceCda({ samples, rho: 1.15, params, track, edgeSmoothSamples: 5 }).cdaM2
+    expect(Math.abs(noisySmoothed - clean)).toBeLessThan(Math.abs(noisyExact - clean) / 3)
+  })
+})

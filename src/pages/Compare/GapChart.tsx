@@ -5,14 +5,21 @@ import { buildDistanceTimeSeries, gapCharts, type CompareItem } from './compare'
 
 export default function GapChart({ items }: { items: CompareItem[] }) {
   if (items.length < 2) return null
-  const series = items.map((it) => buildDistanceTimeSeries(it.full))
+  const series = items.map((it) =>
+    buildDistanceTimeSeries(it.full, { officialSplits: it.officialSplits, lapLengthM: it.lapLengthM }),
+  )
   const gaps = gapCharts(series)
+  const anchored = items.filter((it) => (it.officialSplits?.length ?? 0) >= 2).length
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
       <h2 className="mb-1 text-sm font-semibold text-slate-900">Gap chart</h2>
       <p className="mb-2 text-xs text-slate-500">
         Time behind/ahead of the reference ({items[0].label}) at each point on the track. Negative = ahead.
+        {anchored > 0 &&
+          ` ${anchored}/${items.length} selections are anchored on official lap splits (lap-line gaps are exactly the official gaps).`}
+        {anchored < items.length &&
+          ' Rides without official splits use the reconstructed timeline (±1 s start-anchor uncertainty, mostly in lap 1) — add splits via "Edit details" on the ride.'}
       </p>
       <Chart
         ariaLabel="Cumulative time delta versus distance, relative to the reference ride"
