@@ -152,6 +152,7 @@ function MetadataFormInner({
     try {
       const full = analyzeRideFull(detection.fitBytes, {
         officialTimeS: official,
+        officialSplits: parsedSplits.splits.length > 0 ? parsedSplits.splits : undefined,
         rho,
         params,
         track,

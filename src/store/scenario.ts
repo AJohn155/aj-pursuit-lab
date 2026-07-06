@@ -173,7 +173,14 @@ export function resolveScenario(
     const { ride, venue, full } = baseline
     const { rho } = resolveRideDensity(ride, settings)
     baseCdaM2 = full.analysisResult.cdaRace
-    baseAvgPowerW = weightedAvgPower(full.analysisResult.laps) ?? BLANK_AVG_POWER_W
+    // Recorded-samples convention app-wide (owner request 2026-07): a fresh analysis always
+    // carries avgPowerRecordedW; the lap-average fallback only fires on synthetic inputs.
+    baseAvgPowerW =
+      (Number.isFinite(full.analysisResult.avgPowerRecordedW ?? Number.NaN)
+        ? full.analysisResult.avgPowerRecordedW
+        : null) ??
+      weightedAvgPower(full.analysisResult.laps) ??
+      BLANK_AVG_POWER_W
     baseCrrTyre = settings.tyreCrr
     baseMassKg = ride.systemMassKg
     baseRho = rho
@@ -443,6 +450,8 @@ export function scenarioToFullAnalysis(
     lapCount: nLaps,
     lineHeightsM: sim.lapSplits.map(() => 0),
     avgLineHeightM: 0,
+    extraDistanceM: 0,
+    lineHeightFromOfficialSplits: false,
   }
 
   const detection: Detection = {
@@ -511,6 +520,15 @@ export function scenarioToFullAnalysis(
     qualityFlags: quality.flags,
     qualityScore: quality.score,
     engineVersion: 'scenario-sim',
+    // A simulated scenario has no un-recorded start prefix, so both conventions coincide
+    // with the plain means over the simulated laps.
+    avgPowerRecordedW: detection.raceMeanPowerW,
+    avgPowerExclLap1W:
+      lapResults.length > 1
+        ? lapResults.slice(1).reduce((s, l) => s + l.avgP * l.timeS, 0) /
+          lapResults.slice(1).reduce((s, l) => s + l.timeS, 0)
+        : detection.raceMeanPowerW,
+    extraDistanceM: 0,
   }
 
   const base: RideAnalysis = {

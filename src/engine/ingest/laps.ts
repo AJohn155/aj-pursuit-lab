@@ -18,10 +18,18 @@ const LAP_M = 250
 const N_LAPS = 16
 const INTERIOR_LAPS = 14
 
+/** First/last 1-based lap included in line-height reporting (owner convention 2026-07):
+ * laps 1–2 and the last lap carry too much boundary uncertainty. */
+const LINE_HEIGHT_FIRST_LAP = 3
+const LINE_HEIGHT_LAST_LAP = 15
+/** Official splits are only trusted for anchoring when they sum to the official time. */
+const SPLITS_SUM_TOLERANCE_S = 2.0
+
 export function constructLaps(
   tl: Timeline,
   detection: Detection,
   officialTimeS: number,
+  officialSplits?: number[],
 ): LapConstruction {
   const { t, d } = tl
   const { t0, d0 } = detection
@@ -44,20 +52,55 @@ export function constructLaps(
   const calibrationInterior = (INTERIOR_LAPS * LAP_M) / dRaw14
 
   // Per-lap line height: (raw lap distance − datum) / 2π, using the rollout-true factor
-  // c* = 1 (SPEC §4.7.4). Reported only; not used in the CdA. Can be slightly negative when
-  // the wheel rolled marginally under the datum (rollout/measurement noise).
+  // c* = 1 (SPEC §4.7.4). Reported for the interior laps 3–15 only (owner convention
+  // 2026-07): the start anchor and finish surge make laps 1–2/16 boundary distances too
+  // uncertain to interpret as line height.
   //
-  // Lap 1's start boundary is t0, which for a missingStart race is extrapolated backward
-  // past the timeline's first real sample (interpAt would clamp there, understating how far
-  // back the true start line was and badly distorting lap 1's raw distance). Use the
-  // already-correct triangular-extrapolated d0 for that one boundary instead.
+  // Preferred anchoring (§4.7.4 "prefer official-split-anchored laps"): when trusted
+  // official per-lap splits exist, lap-line TIMES are t0 + official cumulative — an
+  // interior window bounded at near-equal speeds is first-order insensitive to a t0
+  // error (both edges shift together), unlike the whole-race window where a ±1 s t0
+  // error is a full ±16.5 m of raw distance. This also makes per-lap line heights
+  // genuinely independent per lap. Without splits, the single calibration-derived
+  // estimate is repeated across the interior laps (same value by construction).
+  const splitsUsable =
+    officialSplits != null &&
+    officialSplits.length === N_LAPS &&
+    officialSplits.every((s) => Number.isFinite(s) && s > 0) &&
+    Math.abs(officialSplits.reduce((a, b) => a + b, 0) - officialTimeS) <= SPLITS_SUM_TOLERANCE_S
+
   const lineHeightsM: number[] = []
-  for (let ln = 0; ln < N_LAPS; ln++) {
-    const dAtStart = ln === 0 ? d0 : interpAt(t, d, lapBoundaryTimes[ln])
-    const dAtEnd = interpAt(t, d, lapBoundaryTimes[ln + 1])
-    lineHeightsM.push((dAtEnd - dAtStart - LAP_M) / (2 * Math.PI))
+  if (splitsUsable) {
+    const cum: number[] = [0]
+    let acc = 0
+    for (const s of officialSplits) {
+      acc += s
+      cum.push(acc)
+    }
+    for (let ln = 0; ln < N_LAPS; ln++) {
+      if (ln + 1 < LINE_HEIGHT_FIRST_LAP || ln + 1 > LINE_HEIGHT_LAST_LAP) {
+        lineHeightsM.push(Number.NaN)
+        continue
+      }
+      const dAtStart = interpAt(t, d, t0 + cum[ln])
+      const dAtEnd = interpAt(t, d, t0 + cum[ln + 1])
+      lineHeightsM.push((dAtEnd - dAtStart - LAP_M) / (2 * Math.PI))
+    }
+  } else {
+    for (let ln = 0; ln < N_LAPS; ln++) {
+      if (ln + 1 < LINE_HEIGHT_FIRST_LAP || ln + 1 > LINE_HEIGHT_LAST_LAP) {
+        lineHeightsM.push(Number.NaN)
+        continue
+      }
+      const dAtStart = interpAt(t, d, lapBoundaryTimes[ln])
+      const dAtEnd = interpAt(t, d, lapBoundaryTimes[ln + 1])
+      lineHeightsM.push((dAtEnd - dAtStart - LAP_M) / (2 * Math.PI))
+    }
   }
-  const avgLineHeightM = lineHeightsM.reduce((a, b) => a + b, 0) / lineHeightsM.length
+
+  const interior = lineHeightsM.filter((h) => Number.isFinite(h))
+  const avgLineHeightM = interior.length > 0 ? interior.reduce((a, b) => a + b, 0) / interior.length : Number.NaN
+  const extraDistanceM = interior.reduce((a, h) => a + 2 * Math.PI * h, 0)
 
   return {
     calibrationRace,
@@ -67,6 +110,8 @@ export function constructLaps(
     lapCount,
     lineHeightsM,
     avgLineHeightM,
+    extraDistanceM,
+    lineHeightFromOfficialSplits: splitsUsable,
   }
 }
 

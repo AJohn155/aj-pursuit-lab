@@ -33,6 +33,7 @@ export function analyzeStoredRide(ride: Ride, venue: Venue, rawSettings: Setting
 
   return analyzeRideFull(fitBytes, {
     officialTimeS: ride.officialTimeS,
+    officialSplits: ride.officialSplits.length > 0 ? ride.officialSplits : undefined,
     rho,
     params,
     track,

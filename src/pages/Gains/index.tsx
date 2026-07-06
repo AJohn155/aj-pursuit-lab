@@ -8,13 +8,13 @@ import type { ResolvedScenario } from '../../store/scenario'
 import { dataStore } from '../../store/DataStore'
 import { SETTINGS_ID, withSettingsDefaults } from '../../store/types'
 import { useCollection } from '../../store/useCollection'
-import { BADGE_CLASSES, qualityBadgeForScore, weightedAvgPower } from '../Rides/format'
+import { BADGE_CLASSES, displayAvgPower, qualityBadgeForScore } from '../Rides/format'
 import { buildIsochroneGrid, computeGainsRows } from './gains'
 import type { RidePoint } from './gains'
 import IsochroneChart from './IsochroneChart'
 import TornadoChart from './TornadoChart'
 
-export default function Gains() {
+export default function Gains({ embedded = false }: { embedded?: boolean }) {
   const rides = useCollection(dataStore.rides)
   const venues = useCollection(dataStore.venues)
   const scenarios = useCollection(dataStore.scenarios)
@@ -60,7 +60,7 @@ export default function Gains() {
       rides
         .filter((r) => r.analysis)
         .map((r) => {
-          const avgPowerW = weightedAvgPower(r.analysis!.laps)
+          const avgPowerW = displayAvgPower(r.analysis!)
           return avgPowerW != null ? { label: r.eventName || r.date, cdaM2: r.analysis!.cdaRace, avgPowerW } : null
         })
         .filter((p): p is RidePoint => p != null),
@@ -73,7 +73,7 @@ export default function Gains() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold text-slate-900">Gains</h1>
+      {!embedded && <h1 className="text-2xl font-semibold text-slate-900">Gains</h1>}
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <label className="block text-sm">

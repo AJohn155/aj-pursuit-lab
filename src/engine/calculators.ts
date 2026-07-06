@@ -6,6 +6,7 @@
 import { airDensity } from './atmosphere'
 import { G } from './constants'
 import { normalizeLapTimesFast } from './density'
+import { bisect } from './solve'
 import { lapCrrMultiplier } from './track'
 import type { TrackModel } from './types'
 
@@ -100,6 +101,43 @@ export function powerForSpeedTrack(
  */
 export function wattsSavedAero(vMs: number, counts: number, rho: number): number {
   return 0.5 * (counts / 1000) * rho * vMs * vMs * vMs
+}
+
+/** Steady speed (m/s) a flat power holds — inverts powerForSpeedFlat by bisection. */
+export function speedAtPowerFlat(
+  powerW: number,
+  cdaM2: number,
+  rho: number,
+  massKg: number,
+  crr: number,
+  eta: number,
+): number {
+  return bisect((v) => powerForSpeedFlat(v, cdaM2, rho, massKg, crr, eta), powerW, 2, 35)
+}
+
+/**
+ * Seconds saved over a distance by a CdA reduction at CONSTANT power (owner request
+ * 2026-07 item 6: "what would this save in a 40 km TT / the hour"). At baseline CdA the
+ * rider holds `vMs`; the implied power is held fixed and the speed the reduced CdA buys
+ * is solved from the same flat equation. The start lap (if any) is assumed unchanged, so
+ * the saving applies to the remaining `distanceM − startLapDistanceM`.
+ */
+export function timeSavedForCdaReduction(
+  vMs: number,
+  counts: number,
+  rho: number,
+  massKg: number,
+  crr: number,
+  eta: number,
+  baselineCdaM2: number,
+  distanceM: number,
+  startLapDistanceM = 0,
+): number {
+  const remainingM = Math.max(0, distanceM - startLapDistanceM)
+  if (remainingM === 0 || counts <= 0 || baselineCdaM2 - counts / 1000 <= 0) return 0
+  const powerW = powerForSpeedFlat(vMs, baselineCdaM2, rho, massKg, crr, eta)
+  const vNew = speedAtPowerFlat(powerW, baselineCdaM2 - counts / 1000, rho, massKg, crr, eta)
+  return remainingM / vMs - remainingM / vNew
 }
 
 export interface WattsSavedGrid {

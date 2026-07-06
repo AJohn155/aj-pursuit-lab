@@ -8,17 +8,20 @@ import { dataStore } from '../../store/DataStore'
 import { resolveRideDensity } from '../../store/density'
 import { SETTINGS_ID, withSettingsDefaults, type Ride } from '../../store/types'
 import { useCollection } from '../../store/useCollection'
-import { BADGE_CLASSES, qualityBadgeForScore, weightedAvgPower } from './format'
+import { BADGE_CLASSES, displayAvgPower, displayPowerExclLap1, qualityBadgeForScore } from './format'
 
-type SortKey = 'date' | 'timeS' | 'normalizedTimeS' | 'avgW' | 'cda' | 'quality'
+type SortKey = 'date' | 'timeS' | 'normalizedTimeS' | 'avgW' | 'powerExclLap1' | 'cda' | 'quality'
 
 function buildRow(ride: Ride, venueName: string, referenceAirDensity: number, settings: Parameters<typeof resolveRideDensity>[1]) {
   const { rho } = resolveRideDensity(ride, settings)
   const normalizedTimeS = equivalentTimeAtRefDensity(ride.officialTimeS, rho, referenceAirDensity)
-  const avgW = ride.analysis ? weightedAvgPower(ride.analysis.laps) : (ride.manualAvgPowerW ?? null)
+  // Recorded-samples convention app-wide (owner request 2026-07): the SRM-style average,
+  // never counting the un-recorded start's zeros.
+  const avgW = ride.analysis ? displayAvgPower(ride.analysis) : (ride.manualAvgPowerW ?? null)
+  const powerExclLap1 = ride.analysis ? displayPowerExclLap1(ride.analysis) : null
   const cda = ride.analysis?.cdaRace ?? null
   const quality = ride.analysis?.qualityScore ?? null
-  return { ride, venueName, normalizedTimeS, avgW, cda, quality }
+  return { ride, venueName, normalizedTimeS, avgW, powerExclLap1, cda, quality }
 }
 
 export default function RidesList() {
@@ -57,6 +60,8 @@ export default function RidesList() {
           return dir * (a.normalizedTimeS - b.normalizedTimeS)
         case 'avgW':
           return dir * ((a.avgW ?? -Infinity) - (b.avgW ?? -Infinity))
+        case 'powerExclLap1':
+          return dir * ((a.powerExclLap1 ?? -Infinity) - (b.powerExclLap1 ?? -Infinity))
         case 'cda':
           return dir * ((a.cda ?? -Infinity) - (b.cda ?? -Infinity))
         case 'quality':
@@ -93,6 +98,7 @@ export default function RidesList() {
     { key: 'timeS', label: 'Time' },
     { key: 'normalizedTimeS', label: 'Norm. time' },
     { key: 'avgW', label: 'Avg W' },
+    { key: 'powerExclLap1', label: 'W excl. L1' },
     { key: 'cda', label: 'CdA' },
     { key: 'quality', label: 'Quality' },
   ]
@@ -121,7 +127,7 @@ export default function RidesList() {
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ ride, venueName, normalizedTimeS, avgW, cda, quality }) => (
+            {rows.map(({ ride, venueName, normalizedTimeS, avgW, powerExclLap1, cda, quality }) => (
               <tr key={ride.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                 <td className="px-3 py-2">
                   <Link to={`/rides/${ride.id}`} className="font-medium text-slate-900 hover:underline">
@@ -133,6 +139,9 @@ export default function RidesList() {
                 <td className="px-3 py-2 text-slate-600">{ride.officialTimeS.toFixed(3)}s</td>
                 <td className="px-3 py-2 text-slate-600">{normalizedTimeS.toFixed(3)}s</td>
                 <td className="px-3 py-2 text-slate-600">{avgW != null ? `${avgW.toFixed(0)} W` : '—'}</td>
+                <td className="px-3 py-2 text-slate-600">
+                  {powerExclLap1 != null ? `${powerExclLap1.toFixed(0)} W` : '—'}
+                </td>
                 <td className="px-3 py-2 text-slate-600">{cda != null ? cda.toFixed(4) : '—'}</td>
                 <td className="px-3 py-2">
                   {quality != null ? (

@@ -126,7 +126,7 @@ export default function RideDetail() {
 
       <PowerSummary full={full} />
       <Traces t={full.base.timeline.t} v={full.base.timeline.v} p={full.base.timeline.p} cad={full.base.timeline.cad} t0={full.base.detection.t0} />
-      <LapTable laps={full.analysisResult.laps} officialSplits={ride.officialSplits} />
+      <LapTable laps={full.analysisResult.laps} officialSplits={ride.officialSplits} construction={full.base.laps} />
       <CdaCharts laps={full.analysisResult.laps} rolling={full.rolling} />
       <StartPanel startMetrics={full.analysisResult.startMetrics} />
       <WBalChart curve={full.wBalCurve} />
@@ -138,29 +138,25 @@ export default function RideDetail() {
 }
 
 /**
- * Two average-power conventions side by side (owner question 2026-07 item 10): the
- * whole-duration average counts the SRM's under-read standing start (~0 W for the first
- * seconds) against the official duration; the recorded-samples average starts at the first
- * trustworthy power reading — that's the convention SRM/analysis software uses, and the one
- * that matches the owner's historical spreadsheet numbers.
+ * The app-wide power conventions at a glance (owner request 2026-07): the recorded-samples
+ * (SRM-style) average — the headline number everywhere — and "power excluding lap 1", the
+ * owner's settle-power figure. Both come straight off the engine's AnalysisResult.
  */
 function PowerSummary({ full }: { full: FullRideAnalysis }) {
-  const { timeline, detection, laps } = full.base
-  const t0 = detection.t0
-  const tEnd = laps.lapBoundaryTimes[laps.lapBoundaryTimes.length - 1]
-  const idx = timeline.t.map((_, i) => i).filter((i) => timeline.t[i] >= Math.max(t0, timeline.t[0]) && timeline.t[i] <= tEnd)
-  if (idx.length === 0) return null
-  const sum = idx.reduce((s, i) => s + timeline.p[i], 0)
-  const wholeDuration = sum / (tEnd - t0)
-  let fp = idx[0]
-  while (fp < timeline.p.length - 1 && timeline.p[fp] < 100) fp++
-  const recIdx = idx.filter((i) => i >= fp)
-  const recorded = recIdx.length > 0 ? recIdx.reduce((s, i) => s + timeline.p[i], 0) / recIdx.length : wholeDuration
+  const recorded = full.analysisResult.avgPowerRecordedW
+  const exclLap1 = full.analysisResult.avgPowerExclLap1W
+  if (recorded == null || !Number.isFinite(recorded)) return null
   return (
     <p className="text-sm text-slate-600">
-      Avg power: <span className="font-semibold">{wholeDuration.toFixed(0)} W</span> over the official
-      duration (un-recorded start counts as 0 W) · <span className="font-semibold">{recorded.toFixed(0)} W</span>{' '}
-      over recorded samples (SRM-style — matches head-unit / spreadsheet averages).
+      Avg power: <span className="font-semibold">{recorded.toFixed(0)} W</span> (recorded samples,
+      SRM-style — the convention used across the app)
+      {exclLap1 != null && Number.isFinite(exclLap1) && (
+        <>
+          {' '}
+          · Power excl. lap 1: <span className="font-semibold">{exclLap1.toFixed(0)} W</span>
+        </>
+      )}
+      .
     </p>
   )
 }

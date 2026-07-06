@@ -89,23 +89,59 @@ describe('start reconstruction on fixtures (SPEC §4.6)', () => {
   })
 })
 
-describe('per-lap line height, missing-start regression (SPEC §4.7.4)', () => {
-  // Lap 1's start boundary is t0, which for a missingStart race is extrapolated backward
-  // past the timeline's first real sample. Using interpAt there (rather than the already
-  // triangular-extrapolated detection.d0) understated how far back the true start line
-  // was, distorting lap 1's raw distance and producing a physically impossible multi-metre
-  // "line height". Regression: lap 1 should read consistently with the rest of the race.
-  it('lap 1 line height is sane and consistent with later laps on a missingStart race', () => {
-    const officialTimeS = 246.793
+describe('per-lap line height, interior laps 3–15 (SPEC §4.7.4, owner convention 2026-07)', () => {
+  const officialTimeS = 246.793
+  // The owner's real official splits for this ride (sum = 246.793).
+  const OFFICIAL_SPLITS = [
+    21.179, 14.715, 14.808, 14.977, 15.138, 15.05, 14.982, 14.803, 14.904, 15.052, 15.15,
+    15.178, 15.205, 15.176, 15.207, 15.269,
+  ]
+
+  function lapsFor(splits?: number[]) {
     const tl = buildTimeline(
       parseFitRecords(fs.readFileSync(`${fixturesDir}SRM_PM9_ANDERS_TP_2025-10-24_13-18-40.fit`)),
     )
     const det = detectRace(tl, officialTimeS)
-    expect(det.missingStart).toBe(true) // precondition: this is the scenario that triggered the bug
-    const laps = constructLaps(tl, det, officialTimeS)
+    return constructLaps(tl, det, officialTimeS, splits)
+  }
 
-    expect(Math.abs(laps.lineHeightsM[0])).toBeLessThan(1) // was ~2.24 m before the fix
-    expect(laps.lineHeightsM[0]).toBeCloseTo(laps.lineHeightsM[7], 1) // consistent with a mid-race lap
+  it('reports laps 3–15 only — laps 1, 2, 16 are NaN (boundary uncertainty)', () => {
+    const laps = lapsFor()
+    expect(Number.isNaN(laps.lineHeightsM[0])).toBe(true)
+    expect(Number.isNaN(laps.lineHeightsM[1])).toBe(true)
+    expect(Number.isNaN(laps.lineHeightsM[15])).toBe(true)
+    for (let i = 2; i <= 14; i++) {
+      expect(Number.isFinite(laps.lineHeightsM[i])).toBe(true)
+      expect(Math.abs(laps.lineHeightsM[i])).toBeLessThan(1)
+    }
+    expect(laps.lineHeightFromOfficialSplits).toBe(false)
+    expect(laps.extraDistanceM).toBeCloseTo(
+      laps.lineHeightsM.filter(Number.isFinite).reduce((a, h) => a + 2 * Math.PI * h, 0),
+      9,
+    )
+  })
+
+  it('with trusted official splits, boundaries anchor on them and per-lap values are independent', () => {
+    const laps = lapsFor(OFFICIAL_SPLITS)
+    expect(laps.lineHeightFromOfficialSplits).toBe(true)
+    const interior = laps.lineHeightsM.filter(Number.isFinite)
+    expect(interior).toHaveLength(13)
+    // Genuinely per-lap now: not all identical (the calibration-derived fallback is uniform).
+    const spread = Math.max(...interior) - Math.min(...interior)
+    expect(spread).toBeGreaterThan(0.001)
+    // Per-lap values carry boundary-position noise (~±0.5 m, adjacent laps anti-correlate);
+    // only gross errors are asserted here — the robust quantities are the aggregates below.
+    for (const h of interior) expect(Math.abs(h)).toBeLessThan(2)
+    // The sum TELESCOPES: interior boundary errors cancel exactly, so avg/extra depend
+    // only on the two end boundaries of the laps 3–15 window.
+    expect(laps.extraDistanceM).toBeCloseTo(interior.reduce((a, h) => a + 2 * Math.PI * h, 0), 9)
+    expect(Math.abs(laps.avgLineHeightM)).toBeLessThan(0.5)
+  })
+
+  it('splits that do not sum to the official time are rejected (fallback estimate)', () => {
+    const bad = [...OFFICIAL_SPLITS]
+    bad[5] += 5
+    expect(lapsFor(bad).lineHeightFromOfficialSplits).toBe(false)
   })
 })
 

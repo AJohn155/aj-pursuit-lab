@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router-dom'
 import { dataStore } from '../../store/DataStore'
 import { SETTINGS_ID, withSettingsDefaults } from '../../store/types'
 import { useCollection } from '../../store/useCollection'
+import Gains from '../Gains'
 import CadenceCalculator from './CadenceCalculator'
 import PowerForSpeedCalculator from './PowerForSpeedCalculator'
 import ScheduleBuilderCalculator from './ScheduleBuilderCalculator'
@@ -17,6 +18,7 @@ const TABS = [
   { key: 'power-for-speed', label: 'Power for speed' },
   { key: 'watts-saved', label: 'Watts saved' },
   { key: 'time-adjuster', label: 'Time adjuster' },
+  { key: 'gains', label: 'Gains' },
 ] as const
 
 type TabKey = (typeof TABS)[number]['key']
@@ -64,6 +66,7 @@ export default function Calculators() {
         {tab === 'power-for-speed' && <PowerForSpeedCalculator settings={settings} venues={venues} />}
         {tab === 'watts-saved' && <WattsSavedCalculator settings={settings} />}
         {tab === 'time-adjuster' && <TimeAdjusterCalculator />}
+        {tab === 'gains' && <Gains embedded />}
       </div>
     </div>
   )

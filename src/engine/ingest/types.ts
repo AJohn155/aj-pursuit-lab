@@ -72,9 +72,23 @@ export interface LapConstruction {
   /** Elapsed times (s) of the 16 lap-line crossings (datum n·250 m from the start line). */
   lapBoundaryTimes: number[]
   lapCount: number
-  /** Per-lap average height above the black line, m (SPEC §4.7.4). */
+  /**
+   * Per-lap average height above the black line, m (SPEC §4.7.4). Owner convention
+   * (2026-07): reported for the interior laps 3–15 only — laps 1, 2, and the last lap
+   * carry too much boundary uncertainty (start anchor / finish surge) — so those entries
+   * are NaN. When official per-lap splits are available the interior boundaries are
+   * anchored on them, making the per-lap values genuinely independent; otherwise a single
+   * calibration-derived estimate is repeated across the interior laps.
+   */
   lineHeightsM: number[]
+  /** Mean line height over the interior laps (3–15), m. */
   avgLineHeightM: number
+  /** Total extra wheel distance over the interior laps implied by the line heights, m
+   * (Σ 2π·h over laps 3–15). Can come out slightly negative on a calibration residual —
+   * the UI clamps display at 0 and says so. */
+  extraDistanceM: number
+  /** True when line heights came from official-split-anchored boundaries. */
+  lineHeightFromOfficialSplits: boolean
 }
 
 /** Standing-start energy reconstruction (SPEC §4.6). */

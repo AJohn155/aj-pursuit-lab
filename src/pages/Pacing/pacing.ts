@@ -63,6 +63,17 @@ export function solveGhostSchedule(
   return { steadyW, sim, predictedTimeS: sim.finishTimeS, lapTimes: sim.lapTimes }
 }
 
+/**
+ * The inverse direction for the start-split ghost (owner request 2026-07 item 7): ENTER
+ * the settle power ("power excluding lap 1") and get the predicted schedule, instead of
+ * solving power from a target time.
+ */
+export function ghostFromSettlePower(startLapS: number, settleW: number, base: GhostBase): GhostSchedule {
+  const ssBase = { cdaM2: base.cdaM2, rho: base.rho, params: base.params, track: base.track }
+  const plan = startSplitPlan(startLapS, settleW, ssBase)
+  return { steadyW: settleW, sim: plan.sim, predictedTimeS: plan.predictedTimeS, lapTimes: plan.lapTimes, startLapS }
+}
+
 /** Resamples a ghost sim's trajectory (dt=0.1) to a 1 Hz distance-vs-time series, the
  * same shape Compare's gap chart consumes (buildDistanceTimeSeries), so the ghost can be
  * overlaid against any real ride with the existing gapCharts()/timeAtDistance() math.

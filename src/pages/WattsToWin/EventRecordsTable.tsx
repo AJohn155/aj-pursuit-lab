@@ -1,17 +1,18 @@
 // Per-event records table (SPEC §5.4): for each of my rides at this event, per winner —
-// my time, gap, watts-to-match, ΔCdA-to-match — plus a "time at +10/+20/+30 W" mini-table.
+// my time, gap, watts-to-beat, ΔCdA-to-match — plus a "time at +10/+20/+30 W" mini-table.
 //
-// Watts/CdA-to-match reuse solveScenarioUnknown('power'|'cdA', winnerTimeS, resolvedBaseline)
-// — the same solve-for-anything machinery the Adjuster exposes directly (SPEC §4.11
-// "Watts-to-Win = solve power for winner's time at rider's parameters; also report the
-// ΔCdA alternative"). The +N W mini-table scales the ride's real power schedule
-// (powerScale) so pacing shape is preserved and the average shifts by exactly N watts.
+// Watts-to-beat (owner convention 2026-07): hold the ride's ACTUAL start lap fixed and
+// solve the settle power ("power excluding lap 1", engine/startsplit.ts) that beats the
+// winner's time, reported as +X W over the ride's actual power-excl-lap-1. ΔCdA-to-match
+// still reuses solveScenarioUnknown('cdA', ...) (§4.11). The +N W mini-table scales the
+// ride's real power schedule (powerScale) so pacing shape is preserved.
 
 import { useMemo } from 'react'
+import { solveSettlePowerForTime } from '../../engine/startsplit'
 import { analyzeStoredRide } from '../../store/analyzeStoredRide'
 import { resolveScenario, runScenario, solveScenarioUnknown } from '../../store/scenario'
 import type { ResolvedScenario } from '../../store/scenario'
-import { BADGE_CLASSES, qualityBadgeForScore } from '../Rides/format'
+import { BADGE_CLASSES, displayPowerExclLap1, qualityBadgeForScore } from '../Rides/format'
 import type { Event, Ride, Settings, Venue } from '../../store/types'
 
 const POWER_STEPS_W = [10, 20, 30]
@@ -19,25 +20,46 @@ const POWER_STEPS_W = [10, 20, 30]
 interface RideRow {
   ride: Ride
   resolvedBaseline: ResolvedScenario | null
+  /** The ride's actual first-lap time — official split when present, else constructed. */
+  startLapS: number | null
+  /** The ride's actual "power excluding lap 1" (recorded convention). */
+  actualExclLap1W: number | null
   error: string | null
 }
 
 function buildRideRow(ride: Ride, venues: Venue[], settings: Settings): RideRow {
   const venue = venues.find((v) => v.id === ride.venueId)
-  if (!venue) return { ride, resolvedBaseline: null, error: 'venue no longer exists' }
-  if (!ride.fitFileB64) return { ride, resolvedBaseline: null, error: 'no .fit file attached' }
+  if (!venue) return { ride, resolvedBaseline: null, startLapS: null, actualExclLap1W: null, error: 'venue no longer exists' }
+  if (!ride.fitFileB64) return { ride, resolvedBaseline: null, startLapS: null, actualExclLap1W: null, error: 'no .fit file attached' }
   try {
     const full = analyzeStoredRide(ride, venue, settings)
     const resolvedBaseline = resolveScenario({ ride, venue, full }, {}, settings, venues)
-    return { ride, resolvedBaseline, error: null }
+    const startLapS = ride.officialSplits[0] ?? full.analysisResult.laps[0]?.timeS ?? null
+    const actualExclLap1W = displayPowerExclLap1(full.analysisResult)
+    return { ride, resolvedBaseline, startLapS, actualExclLap1W, error: null }
   } catch (e) {
-    return { ride, resolvedBaseline: null, error: e instanceof Error ? e.message : String(e) }
+    return { ride, resolvedBaseline: null, startLapS: null, actualExclLap1W: null, error: e instanceof Error ? e.message : String(e) }
   }
 }
 
 function trySolve(key: 'power' | 'cdA', targetTimeS: number, resolved: ResolvedScenario): number | null {
   try {
     return solveScenarioUnknown(key, targetTimeS, resolved)
+  } catch {
+    return null
+  }
+}
+
+/** Settle power to BEAT the winner (finish 0.1 s inside their time) with the ride's own
+ * start lap held fixed. */
+function trySolveSettleToBeat(winnerTimeS: number, startLapS: number, resolved: ResolvedScenario): number | null {
+  try {
+    return solveSettlePowerForTime(winnerTimeS - 0.1, startLapS, {
+      cdaM2: resolved.cdaM2,
+      rho: resolved.rho,
+      params: resolved.params,
+      track: resolved.track,
+    })
   } catch {
     return null
   }
@@ -68,7 +90,7 @@ export default function EventRecordsTable({
 
   return (
     <div className="space-y-6">
-      {rows.map(({ ride, resolvedBaseline, error }) => (
+      {rows.map(({ ride, resolvedBaseline, startLapS, actualExclLap1W, error }) => (
         <section key={ride.id} className="rounded-xl border border-slate-200 bg-white p-4">
           <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900">
             {ride.eventName || 'Untitled ride'} — {ride.date} · {ride.officialTimeS.toFixed(3)}s
@@ -90,14 +112,17 @@ export default function EventRecordsTable({
                       <th className="px-3 py-2 font-medium">Round / winner</th>
                       <th className="px-3 py-2 font-medium">Winner time</th>
                       <th className="px-3 py-2 font-medium">Gap</th>
-                      <th className="px-3 py-2 font-medium">Watts to match</th>
+                      <th className="px-3 py-2 font-medium">Watts to beat (same start lap)</th>
                       <th className="px-3 py-2 font-medium">ΔCdA to match</th>
                     </tr>
                   </thead>
                   <tbody>
                     {event.winners.map((w, i) => {
                       const gap = ride.officialTimeS - w.timeS
-                      const solvedPower = trySolve('power', w.timeS, resolvedBaseline)
+                      const solvedSettle =
+                        startLapS != null ? trySolveSettleToBeat(w.timeS, startLapS, resolvedBaseline) : null
+                      const deltaW =
+                        solvedSettle != null && actualExclLap1W != null ? solvedSettle - actualExclLap1W : null
                       const solvedCda = trySolve('cdA', w.timeS, resolvedBaseline)
                       return (
                         <tr key={i} className="border-b border-slate-100 last:border-0">
@@ -110,7 +135,19 @@ export default function EventRecordsTable({
                             {gap.toFixed(3)}s
                           </td>
                           <td className="px-3 py-2 text-slate-600">
-                            {solvedPower != null ? `${solvedPower.toFixed(0)} W` : '—'}
+                            {deltaW != null ? (
+                              <>
+                                <span className={`font-semibold ${deltaW > 0 ? 'text-red-700' : 'text-green-700'}`}>
+                                  {deltaW > 0 ? '+' : ''}
+                                  {deltaW.toFixed(0)} W
+                                </span>{' '}
+                                <span className="text-xs text-slate-400">({solvedSettle!.toFixed(0)} W settle)</span>
+                              </>
+                            ) : solvedSettle != null ? (
+                              `${solvedSettle.toFixed(0)} W settle`
+                            ) : (
+                              '—'
+                            )}
                           </td>
                           <td className="px-3 py-2 text-slate-600">
                             {solvedCda != null ? `${(solvedCda - resolvedBaseline.cdaM2).toFixed(4)} m²` : '—'}

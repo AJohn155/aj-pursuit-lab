@@ -27,3 +27,28 @@ export function weightedAvgPower(laps: { timeS: number; avgP: number }[]): numbe
   if (totalTime <= 0) return null
   return valid.reduce((s, l) => s + l.avgP * l.timeS, 0) / totalTime
 }
+
+/** App-wide display convention for a ride's average power (owner request 2026-07): the
+ * recorded-samples (SRM-style) number when the analysis carries it (engine ≥0.4.0), else
+ * the old whole-duration lap average for stale caches. */
+export function displayAvgPower(
+  analysis: { avgPowerRecordedW?: number; laps: { timeS: number; avgP: number }[] } | undefined,
+): number | null {
+  if (!analysis) return null
+  if (analysis.avgPowerRecordedW != null && Number.isFinite(analysis.avgPowerRecordedW)) {
+    return analysis.avgPowerRecordedW
+  }
+  return weightedAvgPower(analysis.laps)
+}
+
+/** "Power excluding lap 1" (owner convention). Falls back to the time-weighted mean of the
+ * cached lap breakdown from lap 2 on — computable even from pre-0.4.0 caches. */
+export function displayPowerExclLap1(
+  analysis: { avgPowerExclLap1W?: number; laps: { timeS: number; avgP: number }[] } | undefined,
+): number | null {
+  if (!analysis) return null
+  if (analysis.avgPowerExclLap1W != null && Number.isFinite(analysis.avgPowerExclLap1W)) {
+    return analysis.avgPowerExclLap1W
+  }
+  return weightedAvgPower(analysis.laps.slice(1))
+}

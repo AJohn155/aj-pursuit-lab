@@ -6,7 +6,6 @@ const TABS = [
   { to: '/compare', label: 'Compare' },
   { to: '/adjuster', label: 'Adjuster' },
   { to: '/watts-to-win', label: 'Watts to Win' },
-  { to: '/gains', label: 'Gains' },
   { to: '/pacing', label: 'Pacing' },
   { to: '/race-day', label: 'Race Day' },
   { to: '/calculators', label: 'Calculators' },

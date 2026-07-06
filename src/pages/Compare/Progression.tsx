@@ -7,17 +7,18 @@ import { resolveRideDensity } from '../../store/density'
 import { withSettingsDefaults, type Ride, type Settings, type Venue } from '../../store/types'
 import Chart from '../../components/Chart'
 import { linearTrend } from '../Rides/RideDetail/trend'
-import { weightedAvgPower } from '../Rides/format'
+import { displayAvgPower, displayPowerExclLap1 } from '../Rides/format'
 
-type MetricKey = 'timeS' | 'normalizedTimeS' | 'cda' | 'avgW' | 'startTimeS' | 'lineHeightM'
+type MetricKey = 'timeS' | 'normalizedTimeS' | 'cda' | 'avgW' | 'powerExclLap1' | 'startTimeS' | 'lineHeightM'
 
 const METRICS: { key: MetricKey; label: string; unit: string }[] = [
   { key: 'timeS', label: 'Finish time', unit: 's' },
   { key: 'normalizedTimeS', label: 'Normalized time', unit: 's' },
   { key: 'cda', label: 'CdA', unit: 'm²' },
-  { key: 'avgW', label: 'Avg power', unit: 'W' },
+  { key: 'avgW', label: 'Avg power (recorded)', unit: 'W' },
+  { key: 'powerExclLap1', label: 'Power excl. lap 1', unit: 'W' },
   { key: 'startTimeS', label: 'Start time (to 95% cruise)', unit: 's' },
-  { key: 'lineHeightM', label: 'Avg line height', unit: 'm' },
+  { key: 'lineHeightM', label: 'Avg line height (laps 3–15)', unit: 'm' },
 ]
 
 interface Point {
@@ -40,13 +41,17 @@ function metricValue(ride: Ride, key: MetricKey, referenceAirDensity: number, se
     case 'cda':
       return ride.analysis?.cdaRace ?? null
     case 'avgW':
-      return ride.analysis ? weightedAvgPower(ride.analysis.laps) : (ride.manualAvgPowerW ?? null)
+      return ride.analysis ? displayAvgPower(ride.analysis) : (ride.manualAvgPowerW ?? null)
+    case 'powerExclLap1':
+      return ride.analysis ? displayPowerExclLap1(ride.analysis) : null
     case 'startTimeS':
       return ride.analysis?.startMetrics.timeTo95PctCruise ?? null
     case 'lineHeightM': {
       if (!ride.analysis) return null
-      const laps = ride.analysis.laps
-      return laps.length > 0 ? laps.reduce((s, l) => s + l.lineHeightM, 0) / laps.length : null
+      // Interior laps (3–15) only — laps 1–2/16 are NaN by convention (engine ≥0.4.0);
+      // pre-0.4.0 caches still carry all-16 finite values, which the filter passes through.
+      const finite = ride.analysis.laps.map((l) => l.lineHeightM).filter(Number.isFinite)
+      return finite.length > 0 ? finite.reduce((s, h) => s + h, 0) / finite.length : null
     }
   }
 }

@@ -57,6 +57,17 @@ export interface AnalysisResult {
   qualityFlags: QualityFlag[]
   qualityScore: number
   engineVersion: string
+  /** Mean power over recorded samples, from the first trustworthy reading (≥100 W) to the
+   * finish — the SRM/head-unit convention, and the app-wide display convention (owner
+   * request 2026-07: never average the un-recorded start's zeros). W. Absent on pre-0.4.0
+   * caches. */
+  avgPowerRecordedW?: number
+  /** Mean power from the lap-2 line to the finish (the owner's "Power excluding lap 1"). W.
+   * Absent on pre-0.4.0 caches. */
+  avgPowerExclLap1W?: number
+  /** Total extra wheel distance implied by line heights over laps 3–15, m (see
+   * LapConstruction.extraDistanceM). Absent on pre-0.4.0 caches. */
+  extraDistanceM?: number
 }
 
 export interface AnalyzeFullOptions extends AnalyzeOptions {
@@ -200,17 +211,28 @@ export function analyzeRideFull(content: ArrayBuffer | Uint8Array, opts: Analyze
     }
   })()
 
-  const fullLapProfiles = steadyLapSpeedProfiles(timeline, laps, track.lapLengthM, PEAK_PHASE_BINS, {
-    firstLap: 1,
-    lastLap: expectedLapCount,
-  })
+  // Steady laps only (3–15, the module default) — the standing-start ramp contaminated the
+  // full-race average this used before 0.4.0 (deferred P4-review item, folded into this
+  // version bump).
+  const steadyPhaseProfiles = steadyLapSpeedProfiles(timeline, laps, track.lapLengthM, PEAK_PHASE_BINS)
   const avgProfile = new Array(PEAK_PHASE_BINS).fill(0)
-  if (fullLapProfiles.length > 0) {
-    for (const p of fullLapProfiles) {
-      for (let i = 0; i < PEAK_PHASE_BINS; i++) avgProfile[i] += p[i] / fullLapProfiles.length
+  if (steadyPhaseProfiles.length > 0) {
+    for (const p of steadyPhaseProfiles) {
+      for (let i = 0; i < PEAK_PHASE_BINS; i++) avgProfile[i] += p[i] / steadyPhaseProfiles.length
     }
   }
   const peakPhase = peakSpeedPhaseDeg(avgProfile, track.lapLengthM, track.bendRadiusM)
+
+  // App-wide power conventions (owner request 2026-07): recorded-samples average (from the
+  // first ≥100 W reading — the SRM/head-unit number) and "power excluding lap 1".
+  const raceStart = Math.max(detection.t0, timeline.t[0])
+  const raceEnd = laps.lapBoundaryTimes[laps.lapBoundaryTimes.length - 1]
+  let firstPowerT = Math.ceil(raceStart)
+  while (firstPowerT < raceEnd && interpAt(timeline.t, timeline.p, firstPowerT) < 100) firstPowerT++
+  const avgPowerRecordedW = meanOverLap(timeline.p, firstPowerT, raceEnd)
+  const avgPowerExclLap1W = Number.isNaN(laps.lapBoundaryTimes[1])
+    ? Number.NaN
+    : meanOverLap(timeline.p, laps.lapBoundaryTimes[1], raceEnd)
 
   // §4.16 scores "dropout seconds in race" — count interpolated samples inside the
   // detected race window only, not across the whole timeline segment. The final fixture's
@@ -253,6 +275,9 @@ export function analyzeRideFull(content: ArrayBuffer | Uint8Array, opts: Analyze
     qualityFlags: quality.flags,
     qualityScore: quality.score,
     engineVersion: ENGINE_VERSION,
+    avgPowerRecordedW,
+    avgPowerExclLap1W,
+    extraDistanceM: laps.extraDistanceM,
   }
 
   return {

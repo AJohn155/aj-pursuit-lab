@@ -112,3 +112,27 @@ describe('rangeInclusive helper', () => {
     expect(r).toContain(15.6)
   })
 })
+
+describe('timeSavedForCdaReduction (owner item 6, 2026-07 — configurable-distance savings)', () => {
+  it('round-trips: speedAtPowerFlat inverts powerForSpeedFlat', async () => {
+    const { powerForSpeedFlat, speedAtPowerFlat } = await import('../calculators')
+    const p = powerForSpeedFlat(16.7, 0.19, 1.15, 100, 0.0014, 0.98)
+    expect(speedAtPowerFlat(p, 0.19, 1.15, 100, 0.0014, 0.98)).toBeCloseTo(16.7, 4)
+  })
+
+  it('is positive, monotonic in counts, and scales roughly with distance', async () => {
+    const { timeSavedForCdaReduction } = await import('../calculators')
+    const args = [1.15, 100, 0.0014, 0.98, 0.19] as const
+    const t4k5 = timeSavedForCdaReduction(16.7, 5, ...args, 4000, 250)
+    const t4k10 = timeSavedForCdaReduction(16.7, 10, ...args, 4000, 250)
+    const t40k5 = timeSavedForCdaReduction(16.7, 5, ...args, 40000, 0)
+    expect(t4k5).toBeGreaterThan(0)
+    expect(t4k10).toBeGreaterThan(t4k5 * 1.8)
+    // 40 km with no start lap ≈ (40000/3750)× the 4 km remaining-distance saving.
+    expect(t40k5 / t4k5).toBeCloseTo(40000 / 3750, 0)
+    // Sanity magnitude: ~0.4 s/count over 4 km at pursuit speed (matches the Gains
+    // tornado's ~4 s for 10 counts).
+    expect(t4k5).toBeGreaterThan(1.5)
+    expect(t4k5).toBeLessThan(3)
+  })
+})

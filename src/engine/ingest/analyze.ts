@@ -13,6 +13,9 @@ import { interpAt } from './util'
 
 export interface AnalyzeOptions {
   officialTimeS: number
+  /** Official per-lap splits, when known — used to anchor interior lap boundaries for the
+   * line-height estimate (§4.7.4 "prefer official-split-anchored laps"). */
+  officialSplits?: number[]
   /** Air density ρ (kg/m³). */
   rho: number
   params: RiderParams
@@ -41,7 +44,7 @@ export function analyzeRide(content: ArrayBuffer | Uint8Array, opts: AnalyzeOpti
   const records = parseFitRecords(content)
   const timeline = buildTimeline(records)
   const detection = detectRace(timeline, opts.officialTimeS)
-  const laps = constructLaps(timeline, detection, opts.officialTimeS)
+  const laps = constructLaps(timeline, detection, opts.officialTimeS, opts.officialSplits)
 
   const groups = lapSampleGroups(timeline, laps, opts.track)
   const steady = groups.slice(STEADY_FIRST_LAP - 1).filter((g) => g.length > 0)

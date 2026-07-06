@@ -41,10 +41,19 @@ describe('analyzeRideFull (SPEC §4.15)', () => {
   it('produces a 16-row lap table with every field finite except CdA on the standing-start laps', () => {
     const full = fullFor('SRM_PM9_ANDERS_TP_2025-10-24_13-18-40.fit', 246.793, 1.122)
     expect(full.analysisResult.laps).toHaveLength(16)
+    full.analysisResult.laps.forEach((lap, i) => {
+      // Line height reports interior laps 3–15 only (owner convention 2026-07).
+      const interior = i >= 2 && i <= 14
+      expect(Number.isFinite(lap.lineHeightM)).toBe(interior)
+    })
+    expect(Number.isFinite(full.analysisResult.avgPowerRecordedW!)).toBe(true)
+    expect(full.analysisResult.avgPowerRecordedW!).toBeGreaterThan(400)
+    expect(Number.isFinite(full.analysisResult.avgPowerExclLap1W!)).toBe(true)
+    expect(full.analysisResult.avgPowerExclLap1W!).toBeLessThan(full.analysisResult.avgPowerRecordedW!)
+    expect(Number.isFinite(full.analysisResult.extraDistanceM!)).toBe(true)
     for (const lap of full.analysisResult.laps) {
       expect(lap.timeS).toBeGreaterThan(0)
       expect(lap.dist).toBe(250)
-      expect(Number.isFinite(lap.lineHeightM)).toBe(true)
       expect(Number.isFinite(lap.avgP)).toBe(true)
       expect(Number.isFinite(lap.avgV)).toBe(true)
       expect(Number.isFinite(lap.avgCad)).toBe(true)

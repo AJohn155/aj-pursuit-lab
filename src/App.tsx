@@ -5,7 +5,6 @@ import RideDetail from './pages/Rides/RideDetail'
 import Compare from './pages/Compare'
 import Adjuster from './pages/Adjuster'
 import WattsToWin from './pages/WattsToWin'
-import Gains from './pages/Gains'
 import Pacing from './pages/Pacing'
 import RaceDay from './pages/RaceDay'
 import Calculators from './pages/Calculators'
@@ -22,7 +21,8 @@ export default function App() {
         <Route path="compare" element={<Compare />} />
         <Route path="adjuster" element={<Adjuster />} />
         <Route path="watts-to-win" element={<WattsToWin />} />
-        <Route path="gains" element={<Gains />} />
+        {/* Gains moved under Calculators (owner request 2026-07); old links keep working. */}
+        <Route path="gains" element={<Navigate to="/calculators?tab=gains" replace />} />
         <Route path="pacing" element={<Pacing />} />
         <Route path="race-day" element={<RaceDay />} />
         <Route path="calculators" element={<Calculators />} />

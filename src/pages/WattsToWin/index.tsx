@@ -6,6 +6,7 @@ import { SETTINGS_ID, withSettingsDefaults, type Event } from '../../store/types
 import { useCollection } from '../../store/useCollection'
 import EventForm from './EventForm'
 import EventRecordsTable from './EventRecordsTable'
+import EventsSummary from './EventsSummary'
 
 export default function WattsToWin() {
   const events = useCollection(dataStore.events)
@@ -62,6 +63,8 @@ export default function WattsToWin() {
           + New event
         </button>
       </div>
+
+      {events.length > 0 && <EventsSummary events={events} rides={rides} />}
 
       {events.length === 0 ? (
         <p className="text-sm text-slate-500">No events yet — add one to start tracking watts-to-win.</p>
