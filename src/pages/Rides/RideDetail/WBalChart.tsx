@@ -2,11 +2,12 @@
 
 import type { WBalPoint } from '../../../engine/ingest'
 import Chart from '../../../components/Chart'
+import { T } from '../../../components/EditableText'
 
 export default function WBalChart({ curve }: { curve: WBalPoint[] }) {
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="mb-2 text-sm font-semibold text-slate-900">W′ balance</h2>
+      <T as="h2" className="mb-2 text-sm font-semibold text-slate-900" id="rides.ridedetail.wbalchart.w-balance" d="W′ balance" />
       <Chart
         ariaLabel="W prime balance over the race, kilojoules; a negative value means the anaerobic tank was over-drawn"
         data={[

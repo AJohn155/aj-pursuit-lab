@@ -2,9 +2,11 @@
 // Selection order matters (drives which ride is the gap-chart reference), so this is an
 // ordered array rather than a Set — checking a box appends to the end, unchecking removes.
 
+import { compareRidesNewestFirst } from '../../store/types'
 import type { Ride, Venue } from '../../store/types'
 import { BADGE_CLASSES, qualityBadgeForScore } from '../Rides/format'
 import { colorFor } from './compare'
+import { T } from '../../components/EditableText'
 
 export default function RideSelector({
   rides,
@@ -18,7 +20,7 @@ export default function RideSelector({
   onChange: (ids: string[]) => void
 }) {
   const venueName = (id: string) => venues.find((v) => v.id === id)?.name ?? '—'
-  const sorted = [...rides].sort((a, b) => b.date.localeCompare(a.date))
+  const sorted = [...rides].sort(compareRidesNewestFirst)
 
   function toggle(id: string) {
     if (selectedIds.includes(id)) onChange(selectedIds.filter((x) => x !== id))
@@ -27,10 +29,8 @@ export default function RideSelector({
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="mb-2 text-sm font-semibold text-slate-900">Rides to compare</h2>
-      <p className="mb-3 text-xs text-slate-500">
-        Pick 2 or more. The first ride checked is the reference for the gap chart.
-      </p>
+      <T as="h2" className="mb-2 text-sm font-semibold text-slate-900" id="compare.rideselector.rides-to-compare" d="Rides to compare" />
+      <T as="p" className="mb-3 text-xs text-slate-500" id="compare.rideselector.pick-2-or-more-the" d="Pick 2 or more. The first ride checked is the reference for the gap chart." />
       <div className="max-h-72 overflow-y-auto rounded-lg border border-slate-100">
         <table className="w-full min-w-[520px] text-left text-sm">
           <tbody>
@@ -54,7 +54,10 @@ export default function RideSelector({
                     <span className="font-medium text-slate-900">{ride.eventName || 'Untitled ride'}</span>
                     <span className="ml-2 text-xs text-slate-500">{venueName(ride.venueId)}</span>
                   </td>
-                  <td className="px-3 py-2 text-slate-600">{ride.date}</td>
+                  <td className="px-3 py-2 text-slate-600">
+                    {ride.date}
+                    {ride.startTime ? ` ${ride.startTime}` : ''}
+                  </td>
                   <td className="px-3 py-2 text-slate-600">{ride.officialTimeS.toFixed(3)}s</td>
                   <td className="px-3 py-2">
                     {ride.analysis && (

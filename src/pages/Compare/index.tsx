@@ -17,6 +17,7 @@ import Progression from './Progression'
 import RideSelector from './RideSelector'
 import SpeedPositionOverlayChart from './SpeedPositionOverlayChart'
 import WBalOverlayChart from './WBalOverlayChart'
+import { T } from '../../components/EditableText'
 
 export default function Compare() {
   const rides = useCollection(dataStore.rides)
@@ -98,7 +99,7 @@ export default function Compare() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold text-slate-900">Compare</h1>
+      <T as="h1" className="text-2xl font-semibold text-slate-900" id="compare.index.compare" d="Compare" />
 
       {rides.length === 0 ? (
         <p className="text-sm text-slate-500">No rides yet — upload rides on the Rides tab first.</p>

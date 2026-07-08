@@ -1,16 +1,21 @@
 // Baseline selector + override controls (SPEC §5.3): CdA, power or power %, Crr, mass,
 // density, venue, gear. Each numeric override field is blank by default (meaning "use the
 // baseline value", shown as its placeholder) — typing a value is what makes it an override.
+// 2026-07 round 4: the "constant target (W)" power mode is gone (owner item 11 — a pursuit
+// always has a start lap, so flat-power-from-standstill answered no real question); a
+// selected ride now shows all its baseline values up front (item 10).
 
 import type { ResolvedScenario } from '../../store/scenario'
+import { compareRidesNewestFirst } from '../../store/types'
 import type { Ride, Venue } from '../../store/types'
-import { BADGE_CLASSES, qualityBadgeForScore } from '../Rides/format'
+import { BADGE_CLASSES, displayPowerExclLap1, qualityBadgeForScore } from '../Rides/format'
+import { T } from '../../components/EditableText'
 
 const inputClass = 'mt-1 block w-full rounded-md border border-slate-300 px-2 py-1 text-sm'
 const labelClass = 'block text-sm'
 const labelTextClass = 'font-medium text-slate-700'
 
-export type PowerMode = 'schedule' | 'constant' | 'startSplit'
+export type PowerMode = 'schedule' | 'startSplit'
 
 export interface OverrideFormState {
   baselineRef: string | 'blank'
@@ -41,7 +46,7 @@ export default function OverrideForm(props: OverrideFormProps) {
 
   return (
     <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="text-sm font-semibold text-slate-900">Baseline &amp; overrides</h2>
+      <T as="h2" className="text-sm font-semibold text-slate-900" id="adjuster.overrideform.baseline-overrides" d="Baseline &amp; overrides" />
 
       <label className={labelClass}>
         <span className={labelTextClass}>Baseline</span>
@@ -52,10 +57,11 @@ export default function OverrideForm(props: OverrideFormProps) {
         >
           <option value="blank">Blank (nominal starting guess)</option>
           {[...rides]
-            .sort((a, b) => b.date.localeCompare(a.date))
+            .sort(compareRidesNewestFirst)
             .map((r) => (
               <option key={r.id} value={r.id}>
                 {r.eventName || 'Untitled ride'} — {r.date}
+                {r.startTime ? ` ${r.startTime}` : ''}
               </option>
             ))}
         </select>
@@ -67,6 +73,10 @@ export default function OverrideForm(props: OverrideFormProps) {
           </span>
         )}
       </label>
+
+      {selectedRide && baselineSnapshot && (
+        <BaselineValues ride={selectedRide} snapshot={baselineSnapshot} />
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <label className={labelClass}>
@@ -159,7 +169,7 @@ export default function OverrideForm(props: OverrideFormProps) {
             <input
               type="radio"
               disabled={isBlank}
-              checked={props.powerMode === 'schedule'}
+              checked={!isBlank && props.powerMode === 'schedule'}
               onChange={() => onChange('powerMode', 'schedule')}
             />
             Scale real pacing (%)
@@ -167,15 +177,7 @@ export default function OverrideForm(props: OverrideFormProps) {
           <label className="flex items-center gap-1.5">
             <input
               type="radio"
-              checked={(isBlank && props.powerMode !== 'startSplit') || props.powerMode === 'constant'}
-              onChange={() => onChange('powerMode', 'constant')}
-            />
-            Constant target (W)
-          </label>
-          <label className="flex items-center gap-1.5">
-            <input
-              type="radio"
-              checked={props.powerMode === 'startSplit'}
+              checked={isBlank || props.powerMode === 'startSplit'}
               onChange={() => onChange('powerMode', 'startSplit')}
             />
             Start split + settle power
@@ -194,7 +196,7 @@ export default function OverrideForm(props: OverrideFormProps) {
               className={inputClass}
             />
           </label>
-        ) : props.powerMode === 'startSplit' ? (
+        ) : (
           <div className="grid grid-cols-2 gap-3">
             <label className={labelClass}>
               <span className="text-xs text-slate-500">Expected start lap (s)</span>
@@ -217,21 +219,42 @@ export default function OverrideForm(props: OverrideFormProps) {
               />
             </label>
           </div>
-        ) : (
-          <label className={labelClass}>
-            <span className="text-xs text-slate-500">
-              {baselineSnapshot ? `Baseline avg ≈ ${baselineSnapshot.baselineAvgPowerW.toFixed(0)} W` : 'Flat power target'}
-            </span>
-            <input
-              type="number"
-              step="1"
-              value={props.constantPowerInput}
-              onChange={(e) => onChange('constantPowerInput', e.target.value)}
-              className={inputClass}
-            />
-          </label>
         )}
       </fieldset>
     </section>
+  )
+}
+
+/**
+ * Everything the selected baseline ride brings to the table (owner request 2026-07 round 4,
+ * item 10) — the comparison point for each override field as it's changed.
+ */
+function BaselineValues({ ride, snapshot }: { ride: Ride; snapshot: ResolvedScenario }) {
+  const exclLap1 = displayPowerExclLap1(ride.analysis)
+  const startLap = ride.officialSplits[0] ?? ride.analysis?.laps[0]?.timeS
+  const entries: { label: string; value: string }[] = [
+    { label: 'Official time', value: `${ride.officialTimeS.toFixed(3)}s` },
+    { label: 'CdA', value: `${snapshot.cdaM2.toFixed(4)} m²` },
+    { label: 'Avg power (recorded)', value: `${snapshot.baselineAvgPowerW.toFixed(0)} W` },
+    { label: 'Power excl. lap 1', value: exclLap1 != null ? `${exclLap1.toFixed(0)} W` : '—' },
+    { label: 'Start lap', value: startLap != null ? `${startLap.toFixed(2)}s` : '—' },
+    { label: 'System mass', value: `${snapshot.params.massKg} kg` },
+    { label: 'Air density ρ', value: `${snapshot.rho.toFixed(4)} kg/m³` },
+    { label: 'Crr (effective)', value: snapshot.params.crrEff.toFixed(5) },
+    { label: 'Venue', value: snapshot.venue.name },
+    { label: 'Gear', value: `${ride.gear.chainring}×${ride.gear.cog}` },
+  ]
+  return (
+    <div className="rounded-lg bg-slate-50 p-3">
+      <T as="p" className="mb-2 text-xs font-semibold uppercase text-slate-500" id="adjuster.overrideform.baseline-ride-values" d="Baseline ride values" />
+      <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-5">
+        {entries.map((e) => (
+          <div key={e.label}>
+            <p className="text-xs text-slate-500">{e.label}</p>
+            <p className="text-sm font-medium text-slate-800">{e.value}</p>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }

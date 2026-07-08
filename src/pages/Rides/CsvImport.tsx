@@ -8,6 +8,7 @@ import { dataStore } from '../../store/DataStore'
 import type { Ride } from '../../store/types'
 import { useCollection } from '../../store/useCollection'
 import { csvToRecords, detectOwnerSheet, matchVenueName, normalizeDateString, parseCsv, parseGear, parseTimeToSeconds } from './csv'
+import { T } from '../../components/EditableText'
 
 const NONE = ''
 
@@ -155,7 +156,7 @@ export default function CsvImport() {
 
   return (
     <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="text-sm font-semibold text-slate-900">Import from CSV</h2>
+      <T as="h2" className="text-sm font-semibold text-slate-900" id="rides.csvimport.import-from-csv" d="Import from CSV" />
 
       <label
         onDragOver={(e) => e.preventDefault()}

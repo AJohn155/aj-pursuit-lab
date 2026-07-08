@@ -179,6 +179,7 @@ export function cdaRolling(
   track: TrackModel,
   windowM: number = track.lapLengthM,
   stepM: number = track.lapLengthM / 4,
+  smoothRadius = 0,
 ): RollingCdaPoint[] {
   if (samples.length !== distCumM.length) {
     throw new Error('cdaRolling: samples and distCumM must be the same length')
@@ -202,7 +203,27 @@ export function cdaRolling(
     const cdaM2 = energyBalanceCda({ samples: windowSamples, rho, params, track, edgeSmoothSamples: 5 }).cdaM2
     points.push({ centerDistM: center, cdaM2 })
   }
-  return points
+  return smoothRadius > 0 ? smoothRollingPoints(points, smoothRadius) : points
+}
+
+/**
+ * Triangular moving average over the rolling-CdA points (owner request 2026-07 round 4
+ * item 5: the raw 2-lap-window series was still too spiky to read). At the default ¼-lap
+ * step, radius 2 spans ±½ lap of centers — each point's residual boundary-ΔKE noise is
+ * substantially independent between steps, so this damps the lap-scale sawtooth without
+ * hiding genuine multi-lap drift. Display-only, like the rest of this diagnostic.
+ */
+export function smoothRollingPoints(points: RollingCdaPoint[], radius: number): RollingCdaPoint[] {
+  return points.map((p, i) => {
+    let sum = 0
+    let wSum = 0
+    for (let j = Math.max(0, i - radius); j <= Math.min(points.length - 1, i + radius); j++) {
+      const w = radius + 1 - Math.abs(j - i)
+      sum += w * points[j].cdaM2
+      wSum += w
+    }
+    return { centerDistM: p.centerDistM, cdaM2: sum / wSum }
+  })
 }
 
 export function cdaInSaneRange(cdaM2: number): boolean {

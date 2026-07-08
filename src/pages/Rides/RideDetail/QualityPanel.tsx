@@ -2,6 +2,7 @@
 
 import type { QualityBadge, QualityFlag } from '../../../engine/ingest'
 import { BADGE_CLASSES } from '../format'
+import { T } from '../../../components/EditableText'
 
 export default function QualityPanel({
   score,
@@ -15,7 +16,7 @@ export default function QualityPanel({
   return (
     <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-900">Data quality</h2>
+        <T as="h2" className="text-sm font-semibold text-slate-900" id="rides.ridedetail.qualitypanel.data-quality" d="Data quality" />
         <span className={`rounded-full px-3 py-1 text-sm font-medium ${BADGE_CLASSES[badge]}`}>
           {score.toFixed(0)} / 100
         </span>

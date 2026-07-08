@@ -5,6 +5,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { BADGE_CLASSES, qualityBadgeForScore } from '../Rides/format'
 import type { Event, Ride, Venue } from '../../store/types'
+import { T } from '../../components/EditableText'
 
 function newEventId(): string {
   return `event-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -135,7 +136,7 @@ export default function EventForm({
       <fieldset>
         <legend className={labelTextClass}>My rides at this event</legend>
         <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-100 p-2">
-          {rides.length === 0 && <p className="text-xs text-slate-500">No rides yet.</p>}
+          {rides.length === 0 && <T as="p" className="text-xs text-slate-500" id="wattstowin.eventform.no-rides-yet" d="No rides yet." />}
           {rides.map((r) => (
             <label key={r.id} className="flex items-center gap-2 py-1 text-sm">
               <input type="checkbox" checked={myRideIds.includes(r.id)} onChange={() => toggleRide(r.id)} />

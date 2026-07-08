@@ -3,6 +3,7 @@
 
 import Chart from '../../components/Chart'
 import type { Event, Ride } from '../../store/types'
+import { T } from '../../components/EditableText'
 
 interface SummaryRow {
   event: Event
@@ -39,7 +40,7 @@ export default function EventsSummary({ events, rides }: { events: Event[]; ride
 
   return (
     <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="text-sm font-semibold text-slate-900">All events at a glance</h2>
+      <T as="h2" className="text-sm font-semibold text-slate-900" id="wattstowin.eventssummary.all-events-at-a-glance" d="All events at a glance" />
       <div className="overflow-x-auto rounded-lg border border-slate-100">
         <table className="w-full min-w-[560px] text-left text-sm">
           <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">

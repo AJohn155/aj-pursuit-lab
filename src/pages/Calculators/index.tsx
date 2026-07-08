@@ -11,6 +11,7 @@ import PowerForSpeedCalculator from './PowerForSpeedCalculator'
 import ScheduleBuilderCalculator from './ScheduleBuilderCalculator'
 import TimeAdjusterCalculator from './TimeAdjusterCalculator'
 import WattsSavedCalculator from './WattsSavedCalculator'
+import { T } from '../../components/EditableText'
 
 const TABS = [
   { key: 'cadence', label: 'Cadence' },
@@ -43,7 +44,7 @@ export default function Calculators() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold text-slate-900">Calculators</h1>
+      <T as="h1" className="text-2xl font-semibold text-slate-900" id="calculators.index.calculators" d="Calculators" />
 
       <div className="flex flex-wrap gap-2">
         {TABS.map((t) => (

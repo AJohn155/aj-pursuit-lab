@@ -8,11 +8,13 @@ import type { RiderParams } from '../../engine/index'
 import { ENGINE_VERSION } from '../../engine/constants'
 import { analyzeRideFull, fitStartDate } from '../../engine/ingest'
 import { parseSplitsText } from './splits'
+import KitPicker from '../../components/KitPicker'
 import { dataStore } from '../../store/DataStore'
 import { bytesToBase64, FIT_FILE_B64_MAX_BYTES } from '../../store/encoding'
 import { SETTINGS_ID, withSettingsDefaults, type Ride, type Settings, type Venue } from '../../store/types'
 import { useCollection } from '../../store/useCollection'
 import type { DetectionConfirmResult } from './DetectionConfirm'
+import { T } from '../../components/EditableText'
 
 function newRideId(): string {
   return `ride-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -61,6 +63,12 @@ function MetadataFormInner({
   const [date, setDate] = useState(
     () => fitStartDate(detection.fitBytes)?.toISOString().slice(0, 10) ?? new Date().toISOString().slice(0, 10),
   )
+  // Same-day ordering tiebreaker (owner request 2026-07 round 4, item 4): prefill from the
+  // file's first timestamp, rendered in the device's local zone — editable like the date.
+  const [startTime, setStartTime] = useState(() => {
+    const d = fitStartDate(detection.fitBytes)
+    return d ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : ''
+  })
   const [eventName, setEventName] = useState('')
   const [round, setRound] = useState<Ride['round']>('qualifying')
   const [venueId, setVenueId] = useState('')
@@ -72,7 +80,12 @@ function MetadataFormInner({
   const [pressureHPa, setPressureHPa] = useState('')
   const [humidityPct, setHumidityPct] = useState('')
   const [systemMassKg, setSystemMassKg] = useState<number | ''>(settings.systemMassKg)
-  const [kitText, setKitText] = useState('')
+  // Per-ride physics params (owner request 2026-07 round 4, item 7): prefilled from the
+  // globals, saved onto the ride so each ride carries (and can later edit) its own values.
+  const [tyreCrr, setTyreCrr] = useState(String(settings.tyreCrr))
+  const [mechEfficiency, setMechEfficiency] = useState(String(settings.mechEfficiency))
+  const [rolloutM, setRolloutM] = useState(String(settings.rolloutM))
+  const [kit, setKit] = useState<string[]>([])
   const [notes, setNotes] = useState('')
   const [caughtRider, setCaughtRider] = useState(false)
   const [interrupted, setInterrupted] = useState(false)
@@ -138,12 +151,19 @@ function MetadataFormInner({
     }
 
     const massKg = systemMassKg === '' ? settings.systemMassKg : systemMassKg
+    const tyreCrrVal = Number.parseFloat(tyreCrr)
+    const mechEfficiencyVal = Number.parseFloat(mechEfficiency)
+    const rolloutVal = Number.parseFloat(rolloutM)
+    if (!(tyreCrrVal > 0) || !(mechEfficiencyVal > 0 && mechEfficiencyVal <= 1) || !(rolloutVal > 0)) {
+      setError('Tyre Crr, mech. efficiency (0–1], and rollout must be positive numbers.')
+      return
+    }
     const track = makeTrack(venue.lapLengthM, venue.bendRadiusM)
     const params: RiderParams = {
       massKg,
       rotatingMassEqKg: settings.rotatingMassEqKg,
-      crrEff: effectiveCrr(settings.tyreCrr, venue.surfaceFactor),
-      mechEfficiency: settings.mechEfficiency,
+      crrEff: effectiveCrr(tyreCrrVal, venue.surfaceFactor),
+      mechEfficiency: mechEfficiencyVal,
       comHeightM: settings.comHeightM,
     }
     const cpW = { cp: settings.cpW, wPrimeJ: settings.wPrimeJ }
@@ -170,16 +190,13 @@ function MetadataFormInner({
       }
 
       const now = new Date().toISOString()
-      const kit = kitText
-        .split(',')
-        .map((k) => k.trim())
-        .filter(Boolean)
 
       const ride: Ride = {
         id: newRideId(),
         createdAt: now,
         updatedAt: now,
         date,
+        startTime: startTime || undefined,
         venueId: venue.id,
         eventName,
         round,
@@ -191,6 +208,9 @@ function MetadataFormInner({
         pressureHPa: pressureHPaVal,
         humidityPct: humidityPctVal,
         systemMassKg: massKg,
+        tyreCrr: tyreCrrVal,
+        mechEfficiency: mechEfficiencyVal,
+        rolloutM: rolloutVal,
         kit,
         notes,
         flags: { outdoor: !venue.indoor, caughtRider, interrupted },
@@ -210,12 +230,18 @@ function MetadataFormInner({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="text-sm font-semibold text-slate-900">Ride details</h2>
+      <T as="h2" className="text-sm font-semibold text-slate-900" id="rides.metadataform.ride-details" d="Ride details" />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <label className={labelClass}>
-          <span className={labelTextClass}>Date</span>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
+          <span className={labelTextClass}>Date &amp; start time</span>
+          <div className="mt-1 flex gap-1">
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="block w-full rounded-md border border-slate-300 px-2 py-1 text-sm" />
+            <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="block w-32 rounded-md border border-slate-300 px-2 py-1 text-sm" />
+          </div>
+          <span className="mt-0.5 block text-xs text-slate-500">
+            Time orders same-day rides; prefilled from the file (local zone).
+          </span>
         </label>
         <label className={labelClass}>
           <span className={labelTextClass}>Event</span>
@@ -338,16 +364,34 @@ function MetadataFormInner({
         )}
       </fieldset>
 
-      <label className={labelClass}>
-        <span className={labelTextClass}>System mass (kg)</span>
-        <input
-          type="number"
-          step="0.1"
-          value={systemMassKg}
-          onChange={(e) => setSystemMassKg(e.target.value === '' ? '' : Number(e.target.value))}
-          className={inputClass}
-        />
-      </label>
+      <fieldset className="space-y-2">
+        <legend className={labelTextClass}>Ride physics parameters</legend>
+        <T as="p" className="text-xs text-slate-500" id="rides.metadataform.prefilled-from-the-global-defaults" d="Prefilled from the global defaults in Settings; saved onto this ride and editable per ride later. Mass, Crr, and efficiency feed this ride's analysis; rollout feeds cadence." />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <label className={labelClass}>
+            <span className="text-xs text-slate-500">System mass (kg)</span>
+            <input
+              type="number"
+              step="0.1"
+              value={systemMassKg}
+              onChange={(e) => setSystemMassKg(e.target.value === '' ? '' : Number(e.target.value))}
+              className={inputClass}
+            />
+          </label>
+          <label className={labelClass}>
+            <span className="text-xs text-slate-500">Tyre Crr</span>
+            <input type="number" step="0.0001" value={tyreCrr} onChange={(e) => setTyreCrr(e.target.value)} className={inputClass} />
+          </label>
+          <label className={labelClass}>
+            <span className="text-xs text-slate-500">Mech. efficiency</span>
+            <input type="number" step="0.001" value={mechEfficiency} onChange={(e) => setMechEfficiency(e.target.value)} className={inputClass} />
+          </label>
+          <label className={labelClass}>
+            <span className="text-xs text-slate-500">Rollout (m)</span>
+            <input type="number" step="0.001" value={rolloutM} onChange={(e) => setRolloutM(e.target.value)} className={inputClass} />
+          </label>
+        </div>
+      </fieldset>
 
       <label className={labelClass}>
         <span className={labelTextClass}>Official lap splits (optional)</span>
@@ -367,15 +411,10 @@ function MetadataFormInner({
         {parsedSplits.error && <span className="mt-0.5 block text-xs text-red-600">{parsedSplits.error}</span>}
       </label>
 
-      <label className={labelClass}>
-        <span className={labelTextClass}>Kit tags (comma-separated)</span>
-        <input
-          value={kitText}
-          onChange={(e) => setKitText(e.target.value)}
-          placeholder="suit, helmet, socks"
-          className={inputClass}
-        />
-      </label>
+      <fieldset className="space-y-1">
+        <legend className={labelTextClass}>Kit</legend>
+        <KitPicker value={kit} onChange={setKit} />
+      </fieldset>
 
       <label className={labelClass}>
         <span className={labelTextClass}>Notes</span>

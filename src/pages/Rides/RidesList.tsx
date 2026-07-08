@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom'
 import { equivalentTimeAtRefDensity } from '../../engine/index'
 import { dataStore } from '../../store/DataStore'
 import { resolveRideDensity } from '../../store/density'
-import { SETTINGS_ID, withSettingsDefaults, type Ride } from '../../store/types'
+import { rideDateTimeKey, SETTINGS_ID, withSettingsDefaults, type Ride } from '../../store/types'
 import { useCollection } from '../../store/useCollection'
 import { BADGE_CLASSES, displayAvgPower, displayPowerExclLap1, qualityBadgeForScore } from './format'
 
@@ -53,7 +53,8 @@ export default function RidesList() {
     return [...filtered].sort((a, b) => {
       switch (sortKey) {
         case 'date':
-          return dir * a.ride.date.localeCompare(b.ride.date)
+          // Same-day rides order by their start time (owner request 2026-07 round 4, item 4).
+          return dir * rideDateTimeKey(a.ride).localeCompare(rideDateTimeKey(b.ride))
         case 'timeS':
           return dir * (a.ride.officialTimeS - b.ride.officialTimeS)
         case 'normalizedTimeS':
@@ -135,7 +136,10 @@ export default function RidesList() {
                   </Link>
                   <p className="text-xs text-slate-500">{venueName}</p>
                 </td>
-                <td className="px-3 py-2 text-slate-600">{ride.date}</td>
+                <td className="px-3 py-2 text-slate-600">
+                  {ride.date}
+                  {ride.startTime && <span className="block text-xs text-slate-400">{ride.startTime}</span>}
+                </td>
                 <td className="px-3 py-2 text-slate-600">{ride.officialTimeS.toFixed(3)}s</td>
                 <td className="px-3 py-2 text-slate-600">{normalizedTimeS.toFixed(3)}s</td>
                 <td className="px-3 py-2 text-slate-600">{avgW != null ? `${avgW.toFixed(0)} W` : '—'}</td>

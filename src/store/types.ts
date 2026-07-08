@@ -28,6 +28,14 @@ export interface Settings extends Persisted {
   // usual set. Persisted so edits survive a reload, same read-time-default pattern as
   // cpW/wPrimeJ above for pre-P7 docs that predate this field.
   gearInventory: { chainring: number; cog: number }[]
+  // Structured kit taxonomy (owner request 2026-07 round 4, item 3): sections (Helmet,
+  // Suit, …) each holding the owner's named equipment, so the same item is selectable
+  // across rides without spelling drift. Fully editable; same read-time-default backfill
+  // pattern as the fields above.
+  kitTaxonomy: { section: string; items: string[] }[]
+  // Per-page text overrides (owner request 2026-07 round 4, item 15): editable box titles/
+  // subtitles, keyed by a stable per-string id. Missing key = the built-in default text.
+  textOverrides: Record<string, string>
 }
 
 export const SETTINGS_ID = 'settings'
@@ -37,6 +45,16 @@ export const DEFAULT_GEAR_INVENTORY: Settings['gearInventory'] = [
   { chainring: 60, cog: 14 },
   { chainring: 64, cog: 15 },
   { chainring: 65, cog: 15 },
+]
+
+export const DEFAULT_KIT_TAXONOMY: Settings['kitTaxonomy'] = [
+  { section: 'Helmet', items: [] },
+  { section: 'Suit', items: [] },
+  { section: 'Shoes', items: [] },
+  { section: 'Socks', items: [] },
+  { section: 'Gloves', items: [] },
+  { section: 'Wheels', items: [] },
+  { section: 'Other', items: [] },
 ]
 
 export const DEFAULT_SETTINGS_VALUES: Omit<Settings, keyof Persisted> = {
@@ -50,6 +68,8 @@ export const DEFAULT_SETTINGS_VALUES: Omit<Settings, keyof Persisted> = {
   cpW: 400,
   wPrimeJ: 25000,
   gearInventory: DEFAULT_GEAR_INVENTORY,
+  kitTaxonomy: DEFAULT_KIT_TAXONOMY,
+  textOverrides: {},
 }
 
 /**
@@ -90,6 +110,13 @@ export interface Venue extends Persisted {
 // §3.3 Ride
 export interface Ride extends Persisted {
   date: string
+  /**
+   * Local time-of-day the effort started, 'HH:MM' 24 h (owner request 2026-07 round 4,
+   * item 4) — the same-day ordering tiebreaker. Prefilled from the .fit file's first
+   * timestamp on upload (converted to the device's local zone), editable afterwards.
+   * Absent on rides saved before the field existed.
+   */
+  startTime?: string
   venueId: string
   eventName: string
   round: 'qualifying' | 'final' | 'other'
@@ -101,6 +128,15 @@ export interface Ride extends Persisted {
   pressureHPa?: number
   humidityPct?: number
   systemMassKg: number
+  /**
+   * Per-ride physics parameters (owner request 2026-07 round 4, item 7). Each defaults to
+   * the global Settings value when absent — rides saved before these fields existed, or
+   * where the owner never overrode them, keep following the global. Setting a value here
+   * freezes THAT ride to it (analysis re-derives with the per-ride value).
+   */
+  tyreCrr?: number
+  mechEfficiency?: number
+  rolloutM?: number
   /**
    * Owner-recorded average power for rides with no attached .fit file (SPEC §3.6 CSV
    * import lists "avg power" as a mapped column, but there's no per-second data to derive
@@ -137,6 +173,20 @@ export interface Scenario extends Persisted {
   }
   result?: { predictedTimeS: number; lapSplits: number[]; note: string }
   pinned: boolean
+}
+
+/**
+ * Sort key for ride ordering (owner request 2026-07 round 4, item 4): date first, then
+ * the optional start time as the same-day tiebreaker (rides without one sort before timed
+ * rides that day, keeping pre-field behavior stable). Compare with localeCompare.
+ */
+export function rideDateTimeKey(ride: Pick<Ride, 'date' | 'startTime'>): string {
+  return `${ride.date}T${ride.startTime ?? '00:00'}`
+}
+
+/** Descending date+time comparator (newest first) — the app's default ride ordering. */
+export function compareRidesNewestFirst(a: Pick<Ride, 'date' | 'startTime'>, b: Pick<Ride, 'date' | 'startTime'>): number {
+  return rideDateTimeKey(b).localeCompare(rideDateTimeKey(a))
 }
 
 // §3.5 Event (Watts-to-Win)

@@ -6,11 +6,12 @@ import { useMemo, useState } from 'react'
 import { dataStore } from '../../store/DataStore'
 import { resolveScenario, resolveScenarioBaseline } from '../../store/scenario'
 import type { ResolvedScenario, ScenarioBaseline } from '../../store/scenario'
-import { SETTINGS_ID, withSettingsDefaults } from '../../store/types'
+import { compareRidesNewestFirst, SETTINGS_ID, withSettingsDefaults } from '../../store/types'
 import { useCollection } from '../../store/useCollection'
 import { BADGE_CLASSES, qualityBadgeForScore } from '../Rides/format'
 import GhostBuilder from './GhostBuilder'
 import OptimalityPanel from './OptimalityPanel'
+import { T } from '../../components/EditableText'
 
 export default function Pacing() {
   const rides = useCollection(dataStore.rides)
@@ -44,7 +45,7 @@ export default function Pacing() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold text-slate-900">Pacing</h1>
+      <T as="h1" className="text-2xl font-semibold text-slate-900" id="pacing.index.pacing" d="Pacing" />
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <label className="block text-sm sm:w-96">
@@ -56,7 +57,7 @@ export default function Pacing() {
           >
             <option value="blank">Blank (nominal starting guess)</option>
             {[...rides]
-              .sort((a, b) => b.date.localeCompare(a.date))
+              .sort(compareRidesNewestFirst)
               .map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.eventName || 'Untitled ride'} — {r.date}

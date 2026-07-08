@@ -1,35 +1,69 @@
 // Inline edit mode for a ride's title/subtitle fields and metadata (owner request 2026-07
-// item 18): event name, date, round, result, venue, kit, notes, official splits. Saves via
-// a normal put (updatedAt bumped), so it syncs like any other edit.
+// item 18): event name, date + start time, round, result, venue, kit, notes, official
+// splits — plus the ride's own physics parameters (round 4 item 7: mass, air density, tyre
+// Crr, mech efficiency, rollout). Saving re-runs the analysis with the edited values when a
+// .fit file is attached, so the cached summary (rides list, totals) stays consistent with
+// what the detail page derives.
 
 import { useState } from 'react'
 import type { FormEvent } from 'react'
+import KitPicker from '../../../components/KitPicker'
+import { ENGINE_VERSION } from '../../../engine/constants'
 import { dataStore } from '../../../store/DataStore'
-import type { Ride, Venue } from '../../../store/types'
+import { analyzeStoredRide } from '../../../store/analyzeStoredRide'
+import { resolveRideDensity } from '../../../store/density'
+import { SETTINGS_ID, withSettingsDefaults, type Ride, type Settings, type Venue } from '../../../store/types'
+import { useCollection } from '../../../store/useCollection'
 import { parseSplitsText } from '../splits'
+import { T } from '../../../components/EditableText'
 
 const inputClass = 'mt-1 block w-full rounded-md border border-slate-300 px-2 py-1 text-sm'
 const labelClass = 'block text-sm'
 const labelTextClass = 'font-medium text-slate-700'
 
-export default function EditRidePanel({
-  ride,
-  venues,
-  onDone,
-}: {
+interface EditRidePanelProps {
   ride: Ride
   venues: Venue[]
   onDone: () => void
-}) {
+}
+
+/**
+ * Gates on settings being loaded before mounting the real form — the physics-parameter
+ * fields read the global defaults in their useState initializers, which run once on mount;
+ * useCollection starts empty, so mounting immediately would freeze Crr/η/rollout as blank
+ * (the exact mount-timing bug MetadataForm documents).
+ */
+export default function EditRidePanel(props: EditRidePanelProps) {
+  const settingsRows = useCollection(dataStore.settings)
+  const rawSettings = settingsRows.find((s) => s.id === SETTINGS_ID)
+  if (!rawSettings) return <p className="text-sm text-slate-500">Loading settings…</p>
+  return <EditRidePanelInner {...props} settings={withSettingsDefaults(rawSettings)} />
+}
+
+function EditRidePanelInner({
+  ride,
+  venues,
+  onDone,
+  settings,
+}: EditRidePanelProps & { settings: Settings }) {
   const [eventName, setEventName] = useState(ride.eventName)
   const [date, setDate] = useState(ride.date)
+  const [startTime, setStartTime] = useState(ride.startTime ?? '')
   const [round, setRound] = useState<Ride['round']>(ride.round)
   const [result, setResult] = useState(ride.result ?? '')
   const [venueId, setVenueId] = useState(ride.venueId)
-  const [kitText, setKitText] = useState(ride.kit.join(', '))
+  const [kit, setKit] = useState<string[]>(ride.kit)
   const [notes, setNotes] = useState(ride.notes)
   const [splitsText, setSplitsText] = useState(ride.officialSplits.map((s) => s.toFixed(3)).join(' '))
+  const [massInput, setMassInput] = useState(String(ride.systemMassKg))
+  // Effective density shown (measured, T/P/RH-derived, or the reference fallback); editing
+  // it stores a direct per-ride airDensity, which takes priority over T/P/RH.
+  const [rhoInput, setRhoInput] = useState(() => resolveRideDensity(ride, settings).rho.toFixed(4))
+  const [crrInput, setCrrInput] = useState(String(ride.tyreCrr ?? settings.tyreCrr))
+  const [etaInput, setEtaInput] = useState(String(ride.mechEfficiency ?? settings.mechEfficiency))
+  const [rolloutInput, setRolloutInput] = useState(String(ride.rolloutM ?? settings.rolloutM))
   const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   const parsedSplits = parseSplitsText(splitsText)
 
@@ -45,36 +79,68 @@ export default function EditRidePanel({
       setError('Choose a venue.')
       return
     }
-    await dataStore.rides.put({
+    const mass = Number.parseFloat(massInput)
+    const rho = Number.parseFloat(rhoInput)
+    const crr = Number.parseFloat(crrInput)
+    const eta = Number.parseFloat(etaInput)
+    const rollout = Number.parseFloat(rolloutInput)
+    if (!(mass > 0) || !(rho > 0) || !(crr > 0) || !(eta > 0 && eta <= 1) || !(rollout > 0)) {
+      setError('Mass, air density, Crr, efficiency (0–1], and rollout must all be positive numbers.')
+      return
+    }
+
+    const updated: Ride = {
       ...ride,
       eventName,
       date,
+      startTime: startTime || undefined,
       round,
       result: result || undefined,
       venueId,
-      kit: kitText
-        .split(',')
-        .map((k) => k.trim())
-        .filter(Boolean),
+      kit,
       notes,
       officialSplits: parsedSplits.splits,
+      systemMassKg: mass,
+      airDensity: rho,
+      tyreCrr: crr,
+      mechEfficiency: eta,
+      rolloutM: rollout,
       flags: { ...ride.flags, outdoor: !venue.indoor },
       updatedAt: new Date().toISOString(),
-    })
-    onDone()
+    }
+
+    setSaving(true)
+    try {
+      // Physics inputs may have changed — refresh the cached summary in the same save so
+      // the rides list / totals never show numbers derived from the old parameters.
+      if (updated.fitFileB64) {
+        const full = analyzeStoredRide(updated, venue, settings)
+        updated.analysis = full.analysisResult
+        updated.analysisVersion = ENGINE_VERSION
+      }
+      await dataStore.rides.put(updated)
+      onDone()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      setSaving(false)
+    }
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3 rounded-xl border border-blue-200 bg-blue-50/40 p-4">
-      <h2 className="text-sm font-semibold text-slate-900">Edit ride details</h2>
+      <T as="h2" className="text-sm font-semibold text-slate-900" id="rides.ridedetail.editridepanel.edit-ride-details" d="Edit ride details" />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className={labelClass}>
           <span className={labelTextClass}>Title (event)</span>
           <input value={eventName} onChange={(e) => setEventName(e.target.value)} className={inputClass} />
         </label>
         <label className={labelClass}>
-          <span className={labelTextClass}>Date</span>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
+          <span className={labelTextClass}>Date &amp; start time</span>
+          <div className="mt-1 flex gap-1">
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="block w-full rounded-md border border-slate-300 px-2 py-1 text-sm" />
+            <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="block w-32 rounded-md border border-slate-300 px-2 py-1 text-sm" />
+          </div>
+          <span className="mt-0.5 block text-xs text-slate-500">Time orders same-day rides.</span>
         </label>
         <label className={labelClass}>
           <span className={labelTextClass}>Round</span>
@@ -98,11 +164,40 @@ export default function EditRidePanel({
             ))}
           </select>
         </label>
-        <label className={labelClass}>
-          <span className={labelTextClass}>Kit tags (comma-separated)</span>
-          <input value={kitText} onChange={(e) => setKitText(e.target.value)} className={inputClass} />
-        </label>
       </div>
+
+      <fieldset className="space-y-2">
+        <legend className={labelTextClass}>Ride physics parameters</legend>
+        <T as="p" className="text-xs text-slate-500" id="rides.ridedetail.editridepanel.this-ride-s-own-values" d="This ride's own values — saving re-runs the analysis with them. Global Settings only provide defaults for new rides." />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <label className={labelClass}>
+            <span className="text-xs text-slate-500">System mass (kg)</span>
+            <input type="number" step="0.1" value={massInput} onChange={(e) => setMassInput(e.target.value)} className={inputClass} />
+          </label>
+          <label className={labelClass}>
+            <span className="text-xs text-slate-500">Air density (kg/m³)</span>
+            <input type="number" step="0.001" value={rhoInput} onChange={(e) => setRhoInput(e.target.value)} className={inputClass} />
+          </label>
+          <label className={labelClass}>
+            <span className="text-xs text-slate-500">Tyre Crr</span>
+            <input type="number" step="0.0001" value={crrInput} onChange={(e) => setCrrInput(e.target.value)} className={inputClass} />
+          </label>
+          <label className={labelClass}>
+            <span className="text-xs text-slate-500">Mech. efficiency</span>
+            <input type="number" step="0.001" value={etaInput} onChange={(e) => setEtaInput(e.target.value)} className={inputClass} />
+          </label>
+          <label className={labelClass}>
+            <span className="text-xs text-slate-500">Rollout (m)</span>
+            <input type="number" step="0.001" value={rolloutInput} onChange={(e) => setRolloutInput(e.target.value)} className={inputClass} />
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset className="space-y-1">
+        <legend className={labelTextClass}>Kit</legend>
+        <KitPicker value={kit} onChange={setKit} />
+      </fieldset>
+
       <label className={labelClass}>
         <span className={labelTextClass}>Official lap splits</span>
         <textarea value={splitsText} onChange={(e) => setSplitsText(e.target.value)} rows={2} className={inputClass} />
@@ -123,9 +218,10 @@ export default function EditRidePanel({
         </button>
         <button
           type="submit"
-          className="rounded-lg bg-slate-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
+          disabled={saving}
+          className="rounded-lg bg-slate-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
-          Save details
+          {saving ? 'Saving & re-analyzing…' : 'Save details'}
         </button>
       </div>
     </form>

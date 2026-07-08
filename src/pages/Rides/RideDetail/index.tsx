@@ -1,5 +1,6 @@
 // Ride detail (SPEC §5.1): traces, lap table, per-lap CdA + trendline, rolling CdA, start
-// panel, W′bal curve, accel/decel summary, speed-vs-position overlay, quality panel.
+// panel, W′bal curve, speed-vs-position overlay, quality panel. (The accel/decel summary
+// was removed on owner request, 2026-07 round 4 item 6.)
 //
 // The compact `ride.analysis` (§4.15 AnalysisResult) is cached for lists/records; this page
 // needs the richer per-second diagnostics (traces, overlay, rolling CdA, W′bal curve) that
@@ -17,9 +18,9 @@ import { ENGINE_VERSION } from '../../../engine/constants'
 import type { FullRideAnalysis } from '../../../engine/ingest'
 import { dataStore } from '../../../store/DataStore'
 import { analyzeStoredRide } from '../../../store/analyzeStoredRide'
-import { SETTINGS_ID } from '../../../store/types'
+import { resolveRideDensity } from '../../../store/density'
+import { SETTINGS_ID, withSettingsDefaults } from '../../../store/types'
 import { useCollection } from '../../../store/useCollection'
-import AccelDecelSummary from './AccelDecelSummary'
 import CdaCharts from './CdaCharts'
 import EditRidePanel from './EditRidePanel'
 import LapTable from './LapTable'
@@ -74,6 +75,18 @@ export default function RideDetail() {
   // boundaries.
   const confirmedRide = ride
 
+  // The physics parameters this ride's analysis actually used (owner request 2026-07
+  // round 4, item 7) — per-ride values when present, global defaults otherwise.
+  const sDefaults = withSettingsDefaults(settings)
+  const density = resolveRideDensity(ride, sDefaults)
+  const paramsLine = [
+    `ρ ${density.rho.toFixed(4)}${density.densityKnown ? '' : ' (reference default)'}`,
+    `mass ${ride.systemMassKg} kg`,
+    `Crr ${ride.tyreCrr ?? sDefaults.tyreCrr}${ride.tyreCrr == null ? ' (global)' : ''}`,
+    `η ${ride.mechEfficiency ?? sDefaults.mechEfficiency}${ride.mechEfficiency == null ? ' (global)' : ''}`,
+    `rollout ${ride.rolloutM ?? sDefaults.rolloutM} m${ride.rolloutM == null ? ' (global)' : ''}`,
+  ].join(' · ')
+
   async function handleSaveRecomputed() {
     await dataStore.rides.put({
       ...confirmedRide,
@@ -90,8 +103,10 @@ export default function RideDetail() {
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">{ride.eventName || 'Ride'}</h1>
           <p className="text-sm text-slate-500">
-            {ride.date} · {venue.name} · {ride.round}
+            {ride.date}
+            {ride.startTime ? ` ${ride.startTime}` : ''} · {venue.name} · {ride.round}
           </p>
+          <p className="text-xs text-slate-400">{paramsLine}</p>
         </div>
         <div className="flex items-center gap-3">
           {stale && (
@@ -130,7 +145,6 @@ export default function RideDetail() {
       <CdaCharts laps={full.analysisResult.laps} rolling={full.rolling} />
       <StartPanel startMetrics={full.analysisResult.startMetrics} />
       <WBalChart curve={full.wBalCurve} />
-      <AccelDecelSummary accelDecel={full.analysisResult.accelDecel} />
       <OverlayChart overlay={full.overlay} geometry={full.geometry} lapLengthM={venue.lapLengthM} />
       <QualityPanel score={full.quality.score} badge={full.quality.badge} flags={full.quality.flags} />
     </div>

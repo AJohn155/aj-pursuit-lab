@@ -4,6 +4,7 @@
 
 import { useState } from 'react'
 import Chart from '../../../components/Chart'
+import { T } from '../../../components/EditableText'
 
 export default function Traces({
   t,
@@ -25,7 +26,7 @@ export default function Traces({
 
   return (
     <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="text-sm font-semibold text-slate-900">Traces</h2>
+      <T as="h2" className="text-sm font-semibold text-slate-900" id="rides.ridedetail.traces.traces" d="Traces" />
       <div className="flex flex-wrap gap-4 text-sm text-slate-600">
         {(
           [

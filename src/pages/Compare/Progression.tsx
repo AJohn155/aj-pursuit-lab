@@ -4,10 +4,11 @@
 import { useMemo, useState } from 'react'
 import { equivalentTimeAtRefDensity } from '../../engine/index'
 import { resolveRideDensity } from '../../store/density'
-import { withSettingsDefaults, type Ride, type Settings, type Venue } from '../../store/types'
+import { rideDateTimeKey, withSettingsDefaults, type Ride, type Settings, type Venue } from '../../store/types'
 import Chart from '../../components/Chart'
 import { linearTrend } from '../Rides/RideDetail/trend'
 import { displayAvgPower, displayPowerExclLap1 } from '../Rides/format'
+import { T } from '../../components/EditableText'
 
 type MetricKey = 'timeS' | 'normalizedTimeS' | 'cda' | 'avgW' | 'powerExclLap1' | 'startTimeS' | 'lineHeightM'
 
@@ -68,6 +69,7 @@ export default function Progression({ rides, venues, rawSettings }: { rides: Rid
         return {
           ride,
           date: ride.date,
+          dateTime: rideDateTimeKey(ride),
           value: metricValue(ride, metric, settings.referenceAirDensity, settings),
           outdoor: venue ? !venue.indoor : false,
           kit: ride.kit,
@@ -75,7 +77,7 @@ export default function Progression({ rides, venues, rawSettings }: { rides: Rid
         }
       })
       .filter((p) => p.value != null)
-      .sort((a, b) => a.date.localeCompare(b.date))
+      .sort((a, b) => a.dateTime.localeCompare(b.dateTime))
   }, [rides, venues, metric, settings])
 
   const trendPoints = points.filter((p) => includeOutdoor || !p.outdoor)
@@ -94,7 +96,7 @@ export default function Progression({ rides, venues, rawSettings }: { rides: Rid
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-slate-900">Progression</h2>
+        <T as="h2" className="text-sm font-semibold text-slate-900" id="compare.progression.progression" d="Progression" />
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <select
             value={metric}

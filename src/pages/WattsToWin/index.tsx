@@ -7,6 +7,8 @@ import { useCollection } from '../../store/useCollection'
 import EventForm from './EventForm'
 import EventRecordsTable from './EventRecordsTable'
 import EventsSummary from './EventsSummary'
+import WattsGapChart from './WattsGapChart'
+import { T } from '../../components/EditableText'
 
 export default function WattsToWin() {
   const events = useCollection(dataStore.events)
@@ -39,7 +41,7 @@ export default function WattsToWin() {
   if (editing) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-semibold text-slate-900">Watts to Win</h1>
+        <T as="h1" className="text-2xl font-semibold text-slate-900" id="wattstowin.index.watts-to-win" d="Watts to Win" />
         <EventForm
           venues={venues}
           rides={rides}
@@ -54,7 +56,7 @@ export default function WattsToWin() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-slate-900">Watts to Win</h1>
+        <T as="h1" className="text-2xl font-semibold text-slate-900" id="wattstowin.index.watts-to-win-2" d="Watts to Win" />
         <button
           type="button"
           onClick={() => setEditing('new')}
@@ -65,6 +67,7 @@ export default function WattsToWin() {
       </div>
 
       {events.length > 0 && <EventsSummary events={events} rides={rides} />}
+      {events.length > 0 && <WattsGapChart events={events} rides={rides} venues={venues} settings={settings} />}
 
       {events.length === 0 ? (
         <p className="text-sm text-slate-500">No events yet — add one to start tracking watts-to-win.</p>

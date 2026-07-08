@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { signInWithGoogle, signOutOfFirebase } from '../../store/firebase'
 import { useAuthUser } from '../../store/useAuth'
+import { T } from '../../components/EditableText'
 
 export default function AuthPanel() {
   const user = useAuthUser()
@@ -30,7 +31,7 @@ export default function AuthPanel() {
 
   return (
     <section className="rounded-lg border border-slate-200 p-4">
-      <h2 className="mb-3 text-sm font-semibold text-slate-900">Cloud sync</h2>
+      <T as="h2" className="mb-3 text-sm font-semibold text-slate-900" id="settings.authpanel.cloud-sync" d="Cloud sync" />
       {user === undefined && <p className="text-sm text-slate-500">Checking sign-in state…</p>}
       {user === null && (
         <div className="space-y-2">

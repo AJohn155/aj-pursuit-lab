@@ -2,6 +2,7 @@
 
 import Chart from '../../components/Chart'
 import type { CompareItem } from './compare'
+import { T } from '../../components/EditableText'
 
 export default function LapSplitChart({ items }: { items: CompareItem[] }) {
   const maxLaps = Math.max(...items.map((it) => it.full.analysisResult.laps.length), 0)
@@ -16,7 +17,7 @@ export default function LapSplitChart({ items }: { items: CompareItem[] }) {
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="mb-2 text-sm font-semibold text-slate-900">Lap splits</h2>
+      <T as="h2" className="mb-2 text-sm font-semibold text-slate-900" id="compare.lapsplitchart.lap-splits" d="Lap splits" />
       <Chart
         ariaLabel="Lap split times grouped by lap number, one bar series per ride, axis scaled to the data"
         data={items.map((it) => ({

@@ -192,7 +192,9 @@ export function analyzeRideFull(content: ArrayBuffer | Uint8Array, opts: Analyze
   const series = raceSampleSeries(timeline, laps, track)
   // Owner-requested (2026-07): a 2-lap window instead of §4.9's 1-lap — the 1-lap window
   // was too spiky to read; this is the display-only diagnostic, so the change is purely
-  // presentational (cdaRace and the per-lap CdA are untouched).
+  // presentational (cdaRace and the per-lap CdA are untouched). Round 4 item 5: still too
+  // spiky — the points themselves now get a triangular smooth (radius 2 ≈ ±½ lap of
+  // centers) on top of the window-edge ΔKE smoothing.
   const rolling = cdaRolling(
     series.map((s) => s.sample),
     series.map((s) => s.distCumM),
@@ -200,7 +202,12 @@ export function analyzeRideFull(content: ArrayBuffer | Uint8Array, opts: Analyze
     opts.params,
     track,
     2 * track.lapLengthM,
-  )
+    track.lapLengthM / 4,
+    2,
+    // Windows overlapping lap 1 have no start-energy term in their balance, so their
+    // "CdA" is inflated by the standing start — the tall left-edge hump the owner read as
+    // spikes. Same reasoning as the per-lap chart clipping laps 1–2.
+  ).filter((p) => p.centerDistM - track.lapLengthM >= track.lapLengthM)
 
   const geometry: GeometryFit | null = (() => {
     try {

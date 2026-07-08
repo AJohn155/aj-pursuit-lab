@@ -5,6 +5,7 @@
 import Chart from '../../components/Chart'
 import { bendShapes } from '../Rides/RideDetail/overlayHelpers'
 import { speedPositionAverage, type CompareItem } from './compare'
+import { T } from '../../components/EditableText'
 
 export default function SpeedPositionOverlayChart({
   items,
@@ -16,12 +17,8 @@ export default function SpeedPositionOverlayChart({
   const refGeometry = items.find((it) => it.full.geometry)?.full.geometry ?? null
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="mb-1 text-sm font-semibold text-slate-900">Speed vs. position overlay</h2>
-      <p className="mb-2 text-xs text-slate-500">
-        Averaged over each ride&apos;s steady laps (3+). Each ride is re-anchored onto track coordinates
-        via its own fitted lap-line phase (0 = start of a straight, shaded bands = bends), so the
-        corner peaks should line up across rides.
-      </p>
+      <T as="h2" className="mb-1 text-sm font-semibold text-slate-900" id="compare.speedpositionoverlaychart.speed-vs-position-overlay" d="Speed vs. position overlay" />
+      <T as="p" className="mb-2 text-xs text-slate-500" id="compare.speedpositionoverlaychart.averaged-over-each-ride-s" d="Averaged over each ride&apos;s steady laps (3+). Each ride is re-anchored onto track coordinates via its own fitted lap-line phase (0 = start of a straight, shaded bands = bends), so the corner peaks should line up across rides." />
       <Chart
         ariaLabel="Average speed versus position on track, one line per ride, phase-aligned, bends shaded"
         data={items.map((it) => {

@@ -9,6 +9,7 @@ import { SETTINGS_ID, withSettingsDefaults, type Scenario } from '../../store/ty
 import { useCollection } from '../../store/useCollection'
 import { computeRaceDayPlan } from './raceday'
 import type { RaceDayGoal, RaceDayStart } from './raceday'
+import { T } from '../../components/EditableText'
 
 // Same nominal starting-guess CdA as a blank Adjuster scenario (store/scenario.ts) —
 // used only when no analyzed ride exists yet to suggest a better default.
@@ -135,7 +136,7 @@ export default function RaceDay() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold text-slate-900">Race Day</h1>
+      <T as="h1" className="text-2xl font-semibold text-slate-900" id="raceday.index.race-day" d="Race Day" />
 
       <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
         <label className={labelClass}>

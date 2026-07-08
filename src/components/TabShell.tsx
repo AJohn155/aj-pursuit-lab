@@ -1,5 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import ajMark from '../assets/aj-mark.png'
+import { TextEditProvider } from './EditableText'
+import { useTextEdit } from './textEditContext'
 
 const TABS = [
   { to: '/rides', label: 'Rides' },
@@ -9,7 +11,6 @@ const TABS = [
   { to: '/pacing', label: 'Pacing' },
   { to: '/race-day', label: 'Race Day' },
   { to: '/calculators', label: 'Calculators' },
-  { to: '/records', label: 'Records' },
   { to: '/settings', label: 'Settings' },
 ]
 
@@ -49,36 +50,60 @@ function AjMark({ className }: { className: string }) {
   )
 }
 
+/** Toggle for the app-wide text-edit mode (owner request 2026-07 round 4, item 15). */
+function EditTextToggle({ className = '' }: { className?: string }) {
+  const { editing, setEditing } = useTextEdit()
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(!editing)}
+      className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+        editing ? 'bg-violet-600 text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+      } ${className}`}
+    >
+      {editing ? '✓ Done editing text' : '✎ Edit text'}
+    </button>
+  )
+}
+
 export default function TabShell() {
   return (
-    <div className="flex min-h-svh flex-col md:flex-row">
-      <nav className="hidden w-56 shrink-0 border-r border-slate-200/80 bg-white p-4 md:block">
-        <div className="mb-6 flex items-center gap-2.5 px-2 pt-1">
-          <AjMark className="block h-7 w-10" />
-          <span className="text-base font-semibold tracking-tight text-slate-900">Pursuit Lab</span>
-        </div>
-        <ul className="space-y-1">
+    <TextEditProvider>
+      <div className="flex min-h-svh flex-col md:flex-row">
+        <nav className="hidden w-56 shrink-0 border-r border-slate-200/80 bg-white p-4 md:block">
+          <div className="mb-6 flex items-center gap-2.5 px-2 pt-1">
+            <AjMark className="block h-7 w-10" />
+            <span className="text-base font-semibold tracking-tight text-slate-900">Pursuit Lab</span>
+          </div>
+          <ul className="space-y-1">
+            {TABS.map((tab) => (
+              <li key={tab.to}>
+                <NavLink to={tab.to} className={linkClasses} style={({ isActive }) => (isActive ? activePillStyle : undefined)}>
+                  {tab.label}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-6 px-2">
+            <EditTextToggle />
+          </div>
+        </nav>
+
+        <main className="flex-1 overflow-y-auto p-4 pb-20 md:p-6 md:pb-6">
+          <div className="mb-2 flex justify-end md:hidden">
+            <EditTextToggle />
+          </div>
+          <Outlet />
+        </main>
+
+        <nav className="fixed inset-x-0 bottom-0 flex overflow-x-auto border-t border-slate-200/80 bg-white/90 backdrop-blur md:hidden">
           {TABS.map((tab) => (
-            <li key={tab.to}>
-              <NavLink to={tab.to} className={linkClasses} style={({ isActive }) => (isActive ? activePillStyle : undefined)}>
-                {tab.label}
-              </NavLink>
-            </li>
+            <NavLink key={tab.to} to={tab.to} className={mobileLinkClasses}>
+              {tab.label}
+            </NavLink>
           ))}
-        </ul>
-      </nav>
-
-      <main className="flex-1 overflow-y-auto p-4 pb-20 md:p-6 md:pb-6">
-        <Outlet />
-      </main>
-
-      <nav className="fixed inset-x-0 bottom-0 flex overflow-x-auto border-t border-slate-200/80 bg-white/90 backdrop-blur md:hidden">
-        {TABS.map((tab) => (
-          <NavLink key={tab.to} to={tab.to} className={mobileLinkClasses}>
-            {tab.label}
-          </NavLink>
-        ))}
-      </nav>
-    </div>
+        </nav>
+      </div>
+    </TextEditProvider>
   )
 }

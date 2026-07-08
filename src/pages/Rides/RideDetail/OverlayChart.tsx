@@ -12,6 +12,7 @@ import type { LapPositionSeries } from '../../../engine/ingest'
 import type { GeometryFit } from '../../../engine/ingest'
 import Chart from '../../../components/Chart'
 import { alignPosM, bendShapes, lapGradientColor, splitAtWraps } from './overlayHelpers'
+import { T } from '../../../components/EditableText'
 
 export default function OverlayChart({
   overlay,
@@ -46,7 +47,7 @@ export default function OverlayChart({
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="mb-2 text-sm font-semibold text-slate-900">Speed vs. position in lap</h2>
+      <T as="h2" className="mb-2 text-sm font-semibold text-slate-900" id="rides.ridedetail.overlaychart.speed-vs-position-in-lap" d="Speed vs. position in lap" />
       <Chart
         ariaLabel="Speed versus position within the lap, one line per lap, light-to-dark by lap number, bends shaded"
         data={data}

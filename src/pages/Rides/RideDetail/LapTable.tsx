@@ -5,6 +5,7 @@
 // a calibration/rollout residual and is said out loud rather than shown as real).
 
 import type { LapConstruction, LapResult } from '../../../engine/ingest'
+import { T } from '../../../components/EditableText'
 
 const LINE_HEIGHT_DEGENERATE_SPREAD_M = 0.001
 
@@ -25,7 +26,7 @@ export default function LapTable({
 
   return (
     <section className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="text-sm font-semibold text-slate-900">Lap table</h2>
+      <T as="h2" className="text-sm font-semibold text-slate-900" id="rides.ridedetail.laptable.lap-table" d="Lap table" />
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] text-left text-sm">
           <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
@@ -72,19 +73,10 @@ export default function LapTable({
         uncertainty to interpret as line height.
       </p>
       {officialAnchored ? (
-        <p className="text-xs text-slate-400">
-          Per-lap values are anchored on your official splits. Individual laps still carry ~±0.5 m of
-          boundary noise (adjacent laps anti-correlate) — the average and total above are the robust
-          numbers, since boundary errors cancel in the sum.
-        </p>
+        <T as="p" className="text-xs text-slate-400" id="rides.ridedetail.laptable.per-lap-values-are-anchored" d="Per-lap values are anchored on your official splits. Individual laps still carry ~±0.5 m of boundary noise (adjacent laps anti-correlate) — the average and total above are the robust numbers, since boundary errors cancel in the sum." />
       ) : (
         heightSpread < LINE_HEIGHT_DEGENERATE_SPREAD_M && (
-          <p className="text-xs text-slate-400">
-            Line height is nearly identical across laps because without official splits, lap boundaries
-            come from the whole-race calibration factor, which forces each lap&apos;s raw distance to the
-            same value by construction. Add official splits (Edit details) to get genuinely per-lap
-            values.
-          </p>
+          <T as="p" className="text-xs text-slate-400" id="rides.ridedetail.laptable.line-height-is-nearly-identical" d="Line height is nearly identical across laps because without official splits, lap boundaries come from the whole-race calibration factor, which forces each lap&apos;s raw distance to the same value by construction. Add official splits (Edit details) to get genuinely per-lap values." />
         )
       )}
     </section>

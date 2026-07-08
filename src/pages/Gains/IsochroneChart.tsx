@@ -3,11 +3,12 @@
 
 import Chart from '../../components/Chart'
 import type { IsochroneGrid, RidePoint } from './gains'
+import { T } from '../../components/EditableText'
 
 export default function IsochroneChart({ grid, ridePoints }: { grid: IsochroneGrid; ridePoints: RidePoint[] }) {
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="mb-2 text-sm font-semibold text-slate-900">Isochrone chart</h2>
+      <T as="h2" className="mb-2 text-sm font-semibold text-slate-900" id="gains.isochronechart.isochrone-chart" d="Isochrone chart" />
       <Chart
         ariaLabel="Contours of simulated finish time over CdA and average power, with rides plotted as points"
         data={[

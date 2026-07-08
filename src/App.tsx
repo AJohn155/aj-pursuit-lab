@@ -8,7 +8,6 @@ import WattsToWin from './pages/WattsToWin'
 import Pacing from './pages/Pacing'
 import RaceDay from './pages/RaceDay'
 import Calculators from './pages/Calculators'
-import Records from './pages/Records'
 import Settings from './pages/Settings'
 
 export default function App() {
@@ -26,7 +25,8 @@ export default function App() {
         <Route path="pacing" element={<Pacing />} />
         <Route path="race-day" element={<RaceDay />} />
         <Route path="calculators" element={<Calculators />} />
-        <Route path="records" element={<Records />} />
+        {/* Records page removed (owner request 2026-07 round 4, item 9); old links land on Rides. */}
+        <Route path="records" element={<Navigate to="/rides" replace />} />
         <Route path="settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/rides" replace />} />
       </Route>

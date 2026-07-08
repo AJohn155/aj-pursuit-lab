@@ -22,11 +22,13 @@ export function analyzeStoredRide(ride: Ride, venue: Venue, rawSettings: Setting
   const fitBytes = base64ToBytes(ride.fitFileB64)
   const { rho, densityKnown } = resolveRideDensity(ride, settings)
   const track = makeTrack(venue.lapLengthM, venue.bendRadiusM)
+  // Per-ride physics overrides (owner request 2026-07 round 4, item 7) — a ride carrying
+  // its own Crr/η uses those; otherwise the current global settings apply, as before.
   const params: RiderParams = {
     massKg: ride.systemMassKg,
     rotatingMassEqKg: settings.rotatingMassEqKg,
-    crrEff: effectiveCrr(settings.tyreCrr, venue.surfaceFactor),
-    mechEfficiency: settings.mechEfficiency,
+    crrEff: effectiveCrr(ride.tyreCrr ?? settings.tyreCrr, venue.surfaceFactor),
+    mechEfficiency: ride.mechEfficiency ?? settings.mechEfficiency,
     comHeightM: settings.comHeightM,
   }
   const cpW = { cp: settings.cpW, wPrimeJ: settings.wPrimeJ }

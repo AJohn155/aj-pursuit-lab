@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import { SOLVE_KEY_LABELS, solveScenarioUnknown } from '../../store/scenario'
 import type { ResolvedScenario, SolveKey } from '../../store/scenario'
+import { T } from '../../components/EditableText'
 
 const SOLVE_KEYS: SolveKey[] = ['power', 'cdA', 'crr', 'massKg', 'rho']
 
@@ -40,10 +41,8 @@ export default function SolveForAnything({
 
   return (
     <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="text-sm font-semibold text-slate-900">Solve for anything</h2>
-      <p className="text-xs text-slate-500">
-        Holding everything else at the current scenario's values, solve for the field that hits a target time.
-      </p>
+      <T as="h2" className="text-sm font-semibold text-slate-900" id="adjuster.solveforanything.solve-for-anything" d="Solve for anything" />
+      <T as="p" className="text-xs text-slate-500" id="adjuster.solveforanything.holding-everything-else-at-the" d="Holding everything else at the current scenario's values, solve for the field that hits a target time." />
       <div className="flex flex-wrap items-end gap-3">
         <label className="text-sm text-slate-600">
           <span className="mb-1 block">Solve for</span>

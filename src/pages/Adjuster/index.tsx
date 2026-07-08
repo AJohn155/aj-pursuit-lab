@@ -12,6 +12,7 @@ import type { OverrideFormState } from './OverrideForm'
 import ResultPanel from './ResultPanel'
 import SavedScenarios from './SavedScenarios'
 import SolveForAnything from './SolveForAnything'
+import { T } from '../../components/EditableText'
 
 function newScenarioId(): string {
   return `scenario-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -26,7 +27,10 @@ const DEFAULT_STATE: OverrideFormState = {
   venueOverride: '',
   chainring: 65,
   cog: 15,
-  powerMode: 'schedule',
+  // A blank baseline has no real pacing to scale, and the flat "constant target (W)" mode
+  // was removed (owner request 2026-07 round 4, item 11) — start split + settle power is
+  // the only sensible default.
+  powerMode: 'startSplit',
   powerScalePct: '100',
   constantPowerInput: '450',
   startLapInput: '21.5',
@@ -41,12 +45,12 @@ function buildOverrides(state: OverrideFormState): Scenario['overrides'] {
   if (state.venueOverride) o.venueId = state.venueOverride
   o.gear = { chainring: state.chainring, cog: state.cog }
   const isBlank = state.baselineRef === 'blank'
-  if (state.powerMode === 'startSplit') {
+  // Blank baselines are always start-split (no recording to scale); the UI enforces this
+  // but the state can lag a baseline switch by one event.
+  if (state.powerMode === 'startSplit' || isBlank) {
     if (state.constantPowerInput !== '') o.avgPowerW = Number(state.constantPowerInput)
     const startLap = Number(state.startLapInput)
     if (state.startLapInput !== '' && Number.isFinite(startLap) && startLap > 0) o.startLapS = startLap
-  } else if (isBlank || state.powerMode === 'constant') {
-    if (state.constantPowerInput !== '') o.avgPowerW = Number(state.constantPowerInput)
   } else if (state.powerScalePct !== '' && state.powerScalePct !== '100') {
     o.powerScale = Number(state.powerScalePct) / 100
   }
@@ -62,7 +66,7 @@ function describeOverrides(overrides: Scenario['overrides'], baselineSnapshot: R
   if (overrides.venueId) parts.push(`venue: ${overrides.venueId}`)
   if (overrides.avgPowerW != null && overrides.startLapS != null)
     parts.push(`start ${overrides.startLapS.toFixed(1)} s + settle ${overrides.avgPowerW.toFixed(0)} W`)
-  else if (overrides.avgPowerW != null) parts.push(`constant ${overrides.avgPowerW.toFixed(0)} W`)
+  else if (overrides.avgPowerW != null) parts.push(`constant ${overrides.avgPowerW.toFixed(0)} W (legacy)`)
   else if (overrides.powerScale != null) parts.push(`power ×${overrides.powerScale.toFixed(2)}`)
   return parts.length > 0 ? parts.join('; ') : 'No overrides (baseline as-is)'
 }
@@ -81,7 +85,13 @@ export default function Adjuster() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
 
   function handleChange<K extends keyof OverrideFormState>(key: K, value: OverrideFormState[K]) {
-    setState((s) => ({ ...s, [key]: value }))
+    setState((s) => {
+      const next = { ...s, [key]: value }
+      // Switching to a blank baseline while in schedule mode: there's no recording to
+      // scale, so fall to the start-split model.
+      if (key === 'baselineRef' && value === 'blank' && next.powerMode === 'schedule') next.powerMode = 'startSplit'
+      return next
+    })
     setSaveMessage(null)
   }
 
@@ -118,7 +128,9 @@ export default function Adjuster() {
   function handleApplySolved(key: SolveKey, value: number) {
     switch (key) {
       case 'power':
-        setState((s) => ({ ...s, powerMode: 'constant', constantPowerInput: value.toFixed(1) }))
+        // Constant mode is gone (round 4 item 11) — a solved power lands in the start-split
+        // model's settle-power field, keeping the current expected start lap.
+        setState((s) => ({ ...s, powerMode: 'startSplit', constantPowerInput: value.toFixed(1) }))
         break
       case 'cdA':
         setState((s) => ({ ...s, cdaInput: value.toFixed(4) }))
@@ -136,14 +148,23 @@ export default function Adjuster() {
     setSaveMessage(null)
   }
 
-  async function handleSave() {
+  /**
+   * `asNew` forks the loaded scenario into a fresh one (owner request 2026-07 round 4,
+   * item 12: load → tweak → either update in place or save an iteration).
+   */
+  async function handleSave(asNew = false) {
     if (!resolved || !run) return
     const now = new Date().toISOString()
+    const updating = editingId != null && !asNew
+    let name = scenarioName || 'Untitled scenario'
+    // Forking without renaming first would leave two identically-named scenarios — mark
+    // the fork so they're tellable apart in the list.
+    if (asNew && editingId != null && scenarios.find((s) => s.id === editingId)?.name === name) name = `${name} (copy)`
     const scenario: Scenario = {
-      id: editingId ?? newScenarioId(),
-      createdAt: editingMeta?.createdAt ?? now,
+      id: updating ? editingId : newScenarioId(),
+      createdAt: updating ? (editingMeta?.createdAt ?? now) : now,
       updatedAt: now,
-      name: scenarioName || 'Untitled scenario',
+      name,
       baseline: state.baselineRef,
       overrides,
       result: {
@@ -151,12 +172,13 @@ export default function Adjuster() {
         lapSplits: run.lapSplits,
         note: describeOverrides(overrides, baselineSnapshot ?? resolved),
       },
-      pinned: editingMeta?.pinned ?? false,
+      pinned: updating ? (editingMeta?.pinned ?? false) : false,
     }
     await dataStore.scenarios.put(scenario)
     setEditingId(scenario.id)
     setEditingMeta({ createdAt: scenario.createdAt, pinned: scenario.pinned })
-    setSaveMessage(editingId ? 'Updated.' : 'Saved.')
+    setScenarioName(scenario.name)
+    setSaveMessage(updating ? 'Updated.' : 'Saved.')
   }
 
   function handleNewScenario() {
@@ -179,12 +201,10 @@ export default function Adjuster() {
       venueOverride: o.venueId ?? '',
       chainring: o.gear?.chainring ?? 65,
       cog: o.gear?.cog ?? 15,
-      powerMode:
-        o.startLapS != null && o.avgPowerW != null
-          ? 'startSplit'
-          : !isBlank && o.avgPowerW == null
-            ? 'schedule'
-            : 'constant',
+      // Constant mode is gone (round 4 item 11): a legacy constant-power scenario
+      // (avgPowerW without startLapS) loads as start-split with the default start lap —
+      // its stored result is untouched until re-saved.
+      powerMode: !isBlank && o.avgPowerW == null ? 'schedule' : 'startSplit',
       powerScalePct: o.powerScale != null ? String(o.powerScale * 100) : '100',
       constantPowerInput: o.avgPowerW != null ? String(o.avgPowerW) : '450',
       startLapInput: o.startLapS != null ? String(o.startLapS) : '21.5',
@@ -211,7 +231,7 @@ export default function Adjuster() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-slate-900">Adjuster</h1>
+        <T as="h1" className="text-2xl font-semibold text-slate-900" id="adjuster.index.adjuster" d="Adjuster" />
         <div className="flex flex-wrap items-center gap-2">
           <input
             value={scenarioName}
@@ -227,6 +247,16 @@ export default function Adjuster() {
           >
             {editingId ? 'Update scenario' : 'Save scenario'}
           </button>
+          {editingId && (
+            <button
+              type="button"
+              onClick={() => void handleSave(true)}
+              disabled={!run}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+            >
+              Save as new
+            </button>
+          )}
           {editingId && (
             <button
               type="button"

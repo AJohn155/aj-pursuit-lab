@@ -8,6 +8,7 @@ import { cadenceGrid } from '../../engine/calculators'
 import type { Gear } from '../../engine/calculators'
 import { dataStore } from '../../store/DataStore'
 import type { Settings, Venue } from '../../store/types'
+import { T } from '../../components/EditableText'
 
 export default function CadenceCalculator({ settings, venues }: { settings: Settings; venues: Venue[] }) {
   const [venueId, setVenueId] = useState(venues[0]?.id ?? '')
@@ -56,7 +57,7 @@ export default function CadenceCalculator({ settings, venues }: { settings: Sett
       </label>
 
       <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-slate-900">Gear inventory</h3>
+        <T as="h3" className="text-sm font-semibold text-slate-900" id="calculators.cadencecalculator.gear-inventory" d="Gear inventory" />
         <div className="flex flex-wrap gap-2">
           {gears.map((g, i) => (
             <div key={i} className="flex items-center gap-1 rounded-lg border border-slate-300 px-2 py-1 text-sm">

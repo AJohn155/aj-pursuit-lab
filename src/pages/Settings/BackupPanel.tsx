@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { dataStore } from '../../store/DataStore'
+import { T } from '../../components/EditableText'
 
 interface Backup {
   version: 1
@@ -57,7 +58,7 @@ export default function BackupPanel() {
 
   return (
     <section className="rounded-lg border border-slate-200 p-4">
-      <h2 className="mb-3 text-sm font-semibold text-slate-900">Backup</h2>
+      <T as="h2" className="mb-3 text-sm font-semibold text-slate-900" id="settings.backuppanel.backup" d="Backup" />
       <div className="flex flex-wrap gap-2">
         <button
           type="button"

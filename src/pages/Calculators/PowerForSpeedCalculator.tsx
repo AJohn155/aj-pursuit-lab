@@ -1,7 +1,11 @@
 // Power-for-speed calculator (SPEC §5.8): P(v) per CdA, flat-equation vs full-track-model
 // toggle, rendered as the owner's spreadsheet-style graded color grid. 2026-07 item 8:
 // every input persists in localStorage (with a Reset button), and each speed row can show
-// its 250 m lap time and 4 km race time (self-entered start lap), toggleable.
+// its 250 m lap time and race time (self-entered start lap), toggleable. 2026-07 round 4
+// items 1–2: the race-time distance is editable (like the Watts-saved calculator), a
+// W/CdA column (watts per m² of CdA at a reference CdA — the owner's 2000–3000 benchmark
+// metric) can be toggled on, and the heat gradient's center point is adjustable below the
+// table.
 
 import { useEffect, useState } from 'react'
 import { effectiveCrr, makeTrack } from '../../engine/index'
@@ -9,9 +13,11 @@ import { KPH_TO_MS, powerForSpeedFlat, powerForSpeedTrack } from '../../engine/c
 import type { Settings, Venue } from '../../store/types'
 import { heatColor, heatT } from './heat'
 import { formatMinSec } from './schedule'
+import { T } from '../../components/EditableText'
 
 const inputClass = 'mt-1 block w-full rounded-md border border-slate-300 px-2 py-1 text-sm'
 const STORAGE_KEY = 'pursuitlab.powerForSpeed.v1'
+const LAP_M = 250
 
 interface PfsState {
   cdaList: string
@@ -27,6 +33,10 @@ interface PfsState {
   showLapTime: boolean
   show4kTime: boolean
   startLap: string
+  raceDistance: string
+  showWPerCda: boolean
+  wPerCdaRef: string
+  gradientCenter: string
 }
 
 function defaults(settings: Settings): PfsState {
@@ -44,6 +54,10 @@ function defaults(settings: Settings): PfsState {
     showLapTime: false,
     show4kTime: false,
     startLap: '21',
+    raceDistance: '4000',
+    showWPerCda: false,
+    wPerCdaRef: '0.190',
+    gradientCenter: '',
   }
 }
 
@@ -55,6 +69,16 @@ function loadState(settings: Settings): PfsState {
     // corrupted storage → fall through to defaults
   }
   return defaults(settings)
+}
+
+/**
+ * heatT with a movable center: values at `center` map to 0.5 (the gradient's yellow),
+ * below-center compresses into [0, 0.5] against min, above-center into [0.5, 1] against
+ * max. Falls back to plain min/max mapping when the center isn't inside (min, max).
+ */
+function heatTCentered(value: number, min: number, max: number, center: number | null): number {
+  if (center == null || !(center > min && center < max)) return heatT(value, min, max)
+  return value <= center ? 0.5 * ((value - min) / (center - min)) : 0.5 + 0.5 * ((value - center) / (max - center))
 }
 
 export default function PowerForSpeedCalculator({ settings, venues }: { settings: Settings; venues: Venue[] }) {
@@ -82,6 +106,10 @@ export default function PowerForSpeedCalculator({ settings, venues }: { settings
   const track = venue ? makeTrack(venue.lapLengthM, venue.bendRadiusM) : null
   const crrEff = effectiveCrr(crr, venue?.surfaceFactor ?? 1)
   const startLapS = Number(state.startLap)
+  const raceDistanceM = Number(state.raceDistance)
+  const raceDistanceValid = Number.isFinite(raceDistanceM) && raceDistanceM > LAP_M
+  const wPerCdaRef = Number(state.wPerCdaRef)
+  const wPerCdaRefValid = Number.isFinite(wPerCdaRef) && wPerCdaRef > 0
 
   const speedMin = Number(state.speedMin)
   const speedMax = Number(state.speedMax)
@@ -106,6 +134,14 @@ export default function PowerForSpeedCalculator({ settings, venues }: { settings
   const flat = cells.flat()
   const min = flat.length > 0 ? Math.min(...flat) : 0
   const max = flat.length > 0 ? Math.max(...flat) : 1
+  const centerRaw = Number(state.gradientCenter)
+  const gradientCenter = state.gradientCenter.trim() !== '' && Number.isFinite(centerRaw) ? centerRaw : null
+
+  const raceDistLabel = raceDistanceValid
+    ? raceDistanceM % 1000 === 0
+      ? `${raceDistanceM / 1000} km`
+      : `${raceDistanceM} m`
+    : 'Race'
 
   return (
     <div className="space-y-4">
@@ -173,17 +209,45 @@ export default function PowerForSpeedCalculator({ settings, venues }: { settings
         </label>
         <label className="flex items-center gap-1.5 text-sm text-slate-600">
           <input type="checkbox" checked={state.show4kTime} onChange={(e) => set('show4kTime', e.target.checked)} />
-          4 km time column
+          Race time column
         </label>
         {state.show4kTime && (
+          <>
+            <label className="flex items-center gap-1.5 text-sm text-slate-600">
+              Distance (m)
+              <input
+                type="number"
+                step="250"
+                value={state.raceDistance}
+                onChange={(e) => set('raceDistance', e.target.value)}
+                className="w-24 rounded-md border border-slate-300 px-2 py-1 text-sm"
+              />
+            </label>
+            <label className="flex items-center gap-1.5 text-sm text-slate-600">
+              Start lap (s)
+              <input
+                type="number"
+                step="0.1"
+                value={state.startLap}
+                onChange={(e) => set('startLap', e.target.value)}
+                className="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm"
+              />
+            </label>
+          </>
+        )}
+        <label className="flex items-center gap-1.5 text-sm text-slate-600">
+          <input type="checkbox" checked={state.showWPerCda} onChange={(e) => set('showWPerCda', e.target.checked)} />
+          W/CdA column
+        </label>
+        {state.showWPerCda && (
           <label className="flex items-center gap-1.5 text-sm text-slate-600">
-            Start lap (s)
+            at CdA (m²)
             <input
               type="number"
-              step="0.1"
-              value={state.startLap}
-              onChange={(e) => set('startLap', e.target.value)}
-              className="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm"
+              step="0.001"
+              value={state.wPerCdaRef}
+              onChange={(e) => set('wPerCdaRef', e.target.value)}
+              className="w-24 rounded-md border border-slate-300 px-2 py-1 text-sm"
             />
           </label>
         )}
@@ -203,7 +267,10 @@ export default function PowerForSpeedCalculator({ settings, venues }: { settings
               <tr>
                 <th className="px-2 py-1.5 text-right font-medium text-slate-600">Speed (km/h)</th>
                 {state.showLapTime && <th className="px-2 py-1.5 text-right font-medium text-slate-600">250 m lap</th>}
-                {state.show4kTime && <th className="px-2 py-1.5 text-right font-medium text-slate-600">4 km time</th>}
+                {state.show4kTime && (
+                  <th className="px-2 py-1.5 text-right font-medium text-slate-600">{raceDistLabel} time</th>
+                )}
+                {state.showWPerCda && <th className="px-2 py-1.5 text-right font-medium text-slate-600">W/CdA</th>}
                 {cdaList.map((cda, i) => (
                   <th key={i} className="px-2 py-1.5 text-right font-medium text-slate-600">
                     {cda.toFixed(3)}
@@ -214,6 +281,7 @@ export default function PowerForSpeedCalculator({ settings, venues }: { settings
             <tbody>
               {speedsKph.map((kph, r) => {
                 const vMs = kph * KPH_TO_MS
+                const usesStartLap = Number.isFinite(startLapS) && startLapS > 0
                 return (
                   <tr key={r}>
                     <td className="border-t border-slate-100 px-2 py-1 text-right font-mono font-medium text-slate-700">
@@ -226,16 +294,23 @@ export default function PowerForSpeedCalculator({ settings, venues }: { settings
                     )}
                     {state.show4kTime && (
                       <td className="border-t border-slate-100 bg-orange-50 px-2 py-1 text-right font-mono text-slate-700">
-                        {Number.isFinite(startLapS) && startLapS > 0
-                          ? formatMinSec(startLapS + 3750 / vMs)
-                          : formatMinSec(4000 / vMs)}
+                        {!raceDistanceValid
+                          ? '—'
+                          : usesStartLap
+                            ? formatMinSec(startLapS + (raceDistanceM - LAP_M) / vMs)
+                            : formatMinSec(raceDistanceM / vMs)}
+                      </td>
+                    )}
+                    {state.showWPerCda && (
+                      <td className="border-t border-slate-100 bg-violet-50 px-2 py-1 text-right font-mono text-slate-700">
+                        {wPerCdaRefValid ? (powerAt(kph, wPerCdaRef) / wPerCdaRef).toFixed(0) : '—'}
                       </td>
                     )}
                     {cells[r].map((w, c) => (
                       <td
                         key={c}
                         className="border-t border-white px-2 py-1 text-right font-mono text-slate-900"
-                        style={{ backgroundColor: heatColor(heatT(w, min, max)) }}
+                        style={{ backgroundColor: heatColor(heatTCentered(w, min, max, gradientCenter)) }}
                       >
                         {w.toFixed(1)}
                       </td>
@@ -247,10 +322,25 @@ export default function PowerForSpeedCalculator({ settings, venues }: { settings
           </table>
         </div>
       )}
-      <p className="text-xs text-slate-500">
-        Watts to hold each speed at each CdA — green = easier, red = harder. Inputs persist on this
-        device; Reset restores the defaults. 4 km time = start lap + remaining 3750 m at that speed.
-      </p>
+      {valid && (
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+          <label className="flex items-center gap-1.5 text-sm text-slate-600">
+            Gradient center (W)
+            <input
+              type="number"
+              step="5"
+              value={state.gradientCenter}
+              onChange={(e) => set('gradientCenter', e.target.value)}
+              placeholder={`auto (${((min + max) / 2).toFixed(0)})`}
+              className="w-28 rounded-md border border-slate-300 px-2 py-1 text-sm"
+            />
+          </label>
+          <span className="text-xs text-slate-400">
+            The wattage that maps to the gradient's yellow midpoint — blank centers it between the grid's min and max.
+          </span>
+        </div>
+      )}
+      <T as="p" className="text-xs text-slate-500" id="calculators.powerforspeedcalculator.watts-to-hold-each-speed" d="Watts to hold each speed at each CdA — green = easier, red = harder. Inputs persist on this device; Reset restores the defaults. Race time = start lap + remaining distance at that speed (start lap covers the first 250 m). W/CdA = required power at the reference CdA divided by that CdA — the owner's watts-per-aero benchmark, typically 2000–3000." />
     </div>
   )
 }

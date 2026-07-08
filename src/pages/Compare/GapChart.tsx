@@ -2,6 +2,7 @@
 
 import Chart from '../../components/Chart'
 import { buildDistanceTimeSeries, gapCharts, type CompareItem } from './compare'
+import { T } from '../../components/EditableText'
 
 export default function GapChart({ items }: { items: CompareItem[] }) {
   if (items.length < 2) return null
@@ -13,7 +14,7 @@ export default function GapChart({ items }: { items: CompareItem[] }) {
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="mb-1 text-sm font-semibold text-slate-900">Gap chart</h2>
+      <T as="h2" className="mb-1 text-sm font-semibold text-slate-900" id="compare.gapchart.gap-chart" d="Gap chart" />
       <p className="mb-2 text-xs text-slate-500">
         Time behind/ahead of the reference ({items[0].label}) at each point on the track. Negative = ahead.
         {anchored > 0 &&

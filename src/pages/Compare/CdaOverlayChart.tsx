@@ -2,11 +2,12 @@
 
 import Chart from '../../components/Chart'
 import type { CompareItem } from './compare'
+import { T } from '../../components/EditableText'
 
 export default function CdaOverlayChart({ items }: { items: CompareItem[] }) {
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="mb-2 text-sm font-semibold text-slate-900">Per-lap CdA overlay</h2>
+      <T as="h2" className="mb-2 text-sm font-semibold text-slate-900" id="compare.cdaoverlaychart.per-lap-cda-overlay" d="Per-lap CdA overlay" />
       <Chart
         ariaLabel="Per-lap CdA overlaid across the selected rides"
         data={items.map((it) => ({

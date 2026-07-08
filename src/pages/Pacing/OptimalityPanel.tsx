@@ -7,6 +7,7 @@ import Chart from '../../components/Chart'
 import type { ResolvedScenario } from '../../store/scenario'
 import { pacingOptimality } from './pacing'
 import type { PacingOptimalityResult } from './pacing'
+import { T } from '../../components/EditableText'
 
 export default function OptimalityPanel({
   resolved,
@@ -36,11 +37,8 @@ export default function OptimalityPanel({
 
   return (
     <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="text-sm font-semibold text-slate-900">Pacing optimality</h2>
-      <p className="text-xs text-slate-500">
-        Grid-searches a 3-parameter pacing family (start intensity, settle power, end-kick timing) against this
-        ride's own environment and compares it to the ride's real pacing.
-      </p>
+      <T as="h2" className="text-sm font-semibold text-slate-900" id="pacing.optimalitypanel.pacing-optimality" d="Pacing optimality" />
+      <T as="p" className="text-xs text-slate-500" id="pacing.optimalitypanel.grid-searches-a-3-parameter" d="Grid-searches a 3-parameter pacing family (start intensity, settle power, end-kick timing) against this ride's own environment and compares it to the ride's real pacing." />
 
       <div className="grid grid-cols-2 gap-4 sm:w-96">
         <label className="block text-sm">

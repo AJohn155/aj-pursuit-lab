@@ -10,6 +10,7 @@ import type { LapResult } from '../../../engine/ingest'
 import type { RollingCdaPoint } from '../../../engine/index'
 import Chart from '../../../components/Chart'
 import { linearTrend } from './trend'
+import { T } from '../../../components/EditableText'
 
 const STEADY_FIRST_LAP = 3
 
@@ -33,7 +34,7 @@ export default function CdaCharts({ laps, rolling }: { laps: LapResult[]; rollin
   return (
     <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
       <div>
-        <h2 className="text-sm font-semibold text-slate-900">Per-lap CdA</h2>
+        <T as="h2" className="text-sm font-semibold text-slate-900" id="rides.ridedetail.cdacharts.per-lap-cda" d="Per-lap CdA" />
         <Chart
           ariaLabel="CdA per lap with a drift trendline over the steady window, axis scaled to the steady spread"
           data={[
@@ -60,14 +61,10 @@ export default function CdaCharts({ laps, rolling }: { laps: LapResult[]; rollin
           }}
           height={260}
         />
-        <p className="mt-1 text-xs text-slate-400">
-          Axis is scaled to the steady laps (3+); laps 1–2 usually clip — their single-lap energy
-          balance is dominated by the standing start and isn&apos;t a real CdA. The headline CdA uses
-          laps 3–16 only.
-        </p>
+        <T as="p" className="mt-1 text-xs text-slate-400" id="rides.ridedetail.cdacharts.axis-is-scaled-to-the" d="Axis is scaled to the steady laps (3+); laps 1–2 usually clip — their single-lap energy balance is dominated by the standing start and isn&apos;t a real CdA. The headline CdA uses laps 3–16 only." />
       </div>
       <div>
-        <h2 className="text-sm font-semibold text-slate-900">Rolling CdA (2-lap window)</h2>
+        <T as="h2" className="text-sm font-semibold text-slate-900" id="rides.ridedetail.cdacharts.rolling-cda-2-lap-window" d="Rolling CdA (2-lap window)" />
         <Chart
           ariaLabel="Rolling CdA over a centered 2-lap window stepped a quarter lap at a time"
           data={[
@@ -83,12 +80,7 @@ export default function CdaCharts({ laps, rolling }: { laps: LapResult[]; rollin
           layout={{ xaxis: { title: { text: 'Distance (m)' } }, yaxis: { title: { text: 'm²' } } }}
           height={220}
         />
-        <p className="mt-1 text-xs text-slate-400">
-          The same energy-balance CdA computed over a sliding 2-lap window (stepped ¼ lap) — a
-          within-race drift diagnostic, not a separate estimate. Single-window noise is large because
-          the aero term is small relative to the KE swing inside a short window; the headline CdA
-          (laps 3–16 in one balance) is the number to trust.
-        </p>
+        <T as="p" className="mt-1 text-xs text-slate-400" id="rides.ridedetail.cdacharts.the-same-energy-balance-cda" d="The same energy-balance CdA computed over a sliding 2-lap window (stepped ¼ lap), then smoothed over ±½ lap of window centers; windows overlapping the standing-start lap are dropped (their balance has no start-energy term, so they aren't a real CdA). A within-race drift diagnostic — the headline CdA (laps 3–16 in one balance) is the number to trust." />
       </div>
     </section>
   )

@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { dataStore } from '../../store/DataStore'
 import { DEFAULT_SETTINGS_VALUES, SETTINGS_ID, withSettingsDefaults, type Settings } from '../../store/types'
 import { useCollection } from '../../store/useCollection'
+import { T } from '../../components/EditableText'
 
 const FIELDS: {
-  key: Exclude<keyof typeof DEFAULT_SETTINGS_VALUES, 'gearInventory'>
+  key: Exclude<keyof typeof DEFAULT_SETTINGS_VALUES, 'gearInventory' | 'kitTaxonomy' | 'textOverrides'>
   label: string
   provenance: string
   step: string
@@ -12,31 +13,32 @@ const FIELDS: {
   {
     key: 'rolloutM',
     label: 'Rollout (m)',
-    provenance: 'Wheel circumference, meters. One canonical value.',
+    provenance: 'Wheel circumference, meters. Default for new rides — each ride carries its own editable copy.',
     step: '0.001',
   },
   {
     key: 'systemMassKg',
     label: 'System mass (kg)',
-    provenance: 'Rider + bike + kit default.',
+    provenance: 'Rider + bike + kit. Default for new rides — each ride carries its own editable copy.',
     step: '0.1',
   },
   {
     key: 'tyreCrr',
     label: 'Tyre Crr',
-    provenance: 'Drum-measured, Vittoria Pista Speed @ ~110 psi.',
+    provenance: 'Drum-measured, Vittoria Pista Speed @ ~110 psi. Default for new rides — editable per ride.',
     step: '0.0001',
   },
   {
     key: 'mechEfficiency',
     label: 'Mechanical efficiency',
-    provenance: 'Drivetrain efficiency (η) used in energy-balance and simulation.',
+    provenance: 'Drivetrain efficiency (η). Default for new rides — editable per ride.',
     step: '0.001',
   },
   {
     key: 'comHeightM',
     label: 'COM height (m)',
-    provenance: 'Rider center-of-mass height above track when upright (for lean geometry).',
+    provenance:
+      'Rider center-of-mass height above the track. Feeds the bend lean geometry (wheel-path vs COM speed, corner normal force) in the simulator and CdA model — genuinely used, so it stays.',
     step: '0.01',
   },
   {
@@ -84,7 +86,7 @@ export default function GlobalParams() {
 function GlobalParamsForm({ settings }: { settings: Settings }) {
   const [draft, setDraft] = useState<Settings>(settings)
 
-  function handleChange(key: Exclude<keyof typeof DEFAULT_SETTINGS_VALUES, 'gearInventory'>, value: string) {
+  function handleChange(key: Exclude<keyof typeof DEFAULT_SETTINGS_VALUES, 'gearInventory' | 'kitTaxonomy' | 'textOverrides'>, value: string) {
     const num = Number(value)
     setDraft((prev) => (prev ? { ...prev, [key]: Number.isNaN(num) ? 0 : num } : prev))
   }
@@ -96,7 +98,7 @@ function GlobalParamsForm({ settings }: { settings: Settings }) {
 
   return (
     <section className="rounded-lg border border-slate-200 p-4">
-      <h2 className="mb-3 text-sm font-semibold text-slate-900">Global parameters</h2>
+      <T as="h2" className="mb-3 text-sm font-semibold text-slate-900" id="settings.globalparams.global-parameters" d="Global parameters" />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {FIELDS.map((f) => (
           <label key={f.key} className="block text-sm">

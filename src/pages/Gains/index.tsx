@@ -6,13 +6,14 @@ import { analyzeStoredRide } from '../../store/analyzeStoredRide'
 import { resolveScenario, resolveScenarioBaseline } from '../../store/scenario'
 import type { ResolvedScenario } from '../../store/scenario'
 import { dataStore } from '../../store/DataStore'
-import { SETTINGS_ID, withSettingsDefaults } from '../../store/types'
+import { compareRidesNewestFirst, SETTINGS_ID, withSettingsDefaults } from '../../store/types'
 import { useCollection } from '../../store/useCollection'
 import { BADGE_CLASSES, displayAvgPower, qualityBadgeForScore } from '../Rides/format'
 import { buildIsochroneGrid, computeGainsRows } from './gains'
 import type { RidePoint } from './gains'
 import IsochroneChart from './IsochroneChart'
 import TornadoChart from './TornadoChart'
+import { T } from '../../components/EditableText'
 
 export default function Gains({ embedded = false }: { embedded?: boolean }) {
   const rides = useCollection(dataStore.rides)
@@ -73,7 +74,7 @@ export default function Gains({ embedded = false }: { embedded?: boolean }) {
 
   return (
     <div className="space-y-4">
-      {!embedded && <h1 className="text-2xl font-semibold text-slate-900">Gains</h1>}
+      {!embedded && <T as="h1" className="text-2xl font-semibold text-slate-900" id="gains.index.gains" d="Gains" />}
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <label className="block text-sm">
@@ -86,7 +87,7 @@ export default function Gains({ embedded = false }: { embedded?: boolean }) {
             <option value="">Choose a baseline…</option>
             <optgroup label="Rides">
               {[...rides]
-                .sort((a, b) => b.date.localeCompare(a.date))
+                .sort(compareRidesNewestFirst)
                 .map((r) => (
                   <option key={r.id} value={`ride:${r.id}`}>
                     {r.eventName || 'Untitled ride'} — {r.date}

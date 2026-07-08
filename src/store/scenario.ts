@@ -149,6 +149,7 @@ export function resolveScenario(
   let baseCdaM2: number
   let baseAvgPowerW: number
   let baseCrrTyre: number
+  let baseMechEfficiency: number
   let baseMassKg: number
   let baseRho: number
   let baseVenue: Venue
@@ -165,6 +166,7 @@ export function resolveScenario(
     baseCdaM2 = BLANK_CDA_M2
     baseAvgPowerW = BLANK_AVG_POWER_W
     baseCrrTyre = settings.tyreCrr
+    baseMechEfficiency = settings.mechEfficiency
     baseMassKg = settings.systemMassKg
     baseRho = settings.referenceAirDensity
     baseVenue = fallbackVenue
@@ -181,7 +183,10 @@ export function resolveScenario(
         : null) ??
       weightedAvgPower(full.analysisResult.laps) ??
       BLANK_AVG_POWER_W
-    baseCrrTyre = settings.tyreCrr
+    // Per-ride physics overrides (2026-07 round 4, item 7) follow the same resolution as
+    // analyzeStoredRide, so the scenario baseline matches the ride's own analysis.
+    baseCrrTyre = ride.tyreCrr ?? settings.tyreCrr
+    baseMechEfficiency = ride.mechEfficiency ?? settings.mechEfficiency
     baseMassKg = ride.systemMassKg
     baseRho = rho
     baseVenue = venue
@@ -209,7 +214,7 @@ export function resolveScenario(
     massKg,
     rotatingMassEqKg: settings.rotatingMassEqKg,
     crrEff,
-    mechEfficiency: settings.mechEfficiency,
+    mechEfficiency: baseMechEfficiency,
     comHeightM: settings.comHeightM,
   }
   const gear = overrides.gear ?? baseGear

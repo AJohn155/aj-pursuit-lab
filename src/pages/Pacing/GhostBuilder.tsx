@@ -5,10 +5,12 @@ import { useMemo, useState } from 'react'
 import Chart from '../../components/Chart'
 import { analyzeStoredRide } from '../../store/analyzeStoredRide'
 import type { ResolvedScenario } from '../../store/scenario'
+import { compareRidesNewestFirst } from '../../store/types'
 import type { Ride, Settings, Venue } from '../../store/types'
 import { buildDistanceTimeSeries, gapCharts } from '../Compare/compare'
 import { ghostDistanceTimeSeries, ghostFromSettlePower, solveGhostSchedule } from './pacing'
 import type { GhostSchedule, GhostScheduleKind } from './pacing'
+import { T } from '../../components/EditableText'
 
 export default function GhostBuilder({
   environment,
@@ -84,7 +86,7 @@ export default function GhostBuilder({
 
   return (
     <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="text-sm font-semibold text-slate-900">Ghost builder</h2>
+      <T as="h2" className="text-sm font-semibold text-slate-900" id="pacing.ghostbuilder.ghost-builder" d="Ghost builder" />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {kind === 'startSplit' && (
@@ -158,7 +160,7 @@ export default function GhostBuilder({
           >
             <option value="">None</option>
             {[...rides]
-              .sort((a, b) => b.date.localeCompare(a.date))
+              .sort(compareRidesNewestFirst)
               .map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.eventName || 'Untitled ride'} — {r.date}

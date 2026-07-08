@@ -3,6 +3,7 @@
 
 import Chart from '../../components/Chart'
 import type { GainsRow } from './gains'
+import { T } from '../../components/EditableText'
 
 export default function TornadoChart({ rows, unit }: { rows: GainsRow[]; unit: 'seconds' | 'watts' }) {
   // Plotly draws horizontal bar categories bottom-to-top; reverse so the biggest gain
@@ -12,7 +13,7 @@ export default function TornadoChart({ rows, unit }: { rows: GainsRow[]; unit: '
 
   return (
     <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="text-sm font-semibold text-slate-900">Marginal gains</h2>
+      <T as="h2" className="text-sm font-semibold text-slate-900" id="gains.tornadochart.marginal-gains" d="Marginal gains" />
       <Chart
         ariaLabel={`Tornado chart of time gained per perturbation, in ${unit === 'seconds' ? 'seconds' : 'watts-equivalent'}`}
         data={[

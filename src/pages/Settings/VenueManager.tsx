@@ -1,6 +1,7 @@
 import { dataStore } from '../../store/DataStore'
 import type { GeometrySource, Venue } from '../../store/types'
 import { useCollection } from '../../store/useCollection'
+import { T } from '../../components/EditableText'
 
 function residualFor(v: Venue): number {
   return v.lapLengthM - (2 * v.straightLengthM + 2 * Math.PI * v.bendRadiusM)
@@ -193,7 +194,7 @@ export default function VenueManager() {
   return (
     <section>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-900">Venues</h2>
+        <T as="h2" className="text-sm font-semibold text-slate-900" id="settings.venuemanager.venues" d="Venues" />
         <button
           type="button"
           onClick={addVenue}
