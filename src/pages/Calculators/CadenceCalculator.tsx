@@ -1,17 +1,27 @@
 // Cadence calculator (SPEC §5.8): editable gear inventory, rollout from settings, grid
-// lap-time (13.0–17.0 s step 0.1) × gear → cadence; venue-aware lap length; highlights the
-// matching gear column when opened from a ride (?chainring=&cog=).
+// lap-time × gear → cadence; venue-aware lap length; highlights the matching gear column
+// when opened from a ride (?chainring=&cog=).
+//
+// Owner request 2026-07: the grid is driven by an adjustable SPEED range (min/max/step
+// km/h) with a Speed column alongside the lap-time column, mirroring the Power-for-speed
+// and Watts-saved calculators. Speed = lapLength / lapTime, so each speed row maps to a
+// venue-dependent lap time; cadence is computed from that lap time.
 
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { cadenceGrid } from '../../engine/calculators'
+import { cadenceGrid, KPH_TO_MS } from '../../engine/calculators'
 import type { Gear } from '../../engine/calculators'
 import { dataStore } from '../../store/DataStore'
 import type { Settings, Venue } from '../../store/types'
 import { T } from '../../components/EditableText'
 
+const rangeInputClass = 'block w-full rounded-md border border-slate-300 px-2 py-1 text-sm'
+
 export default function CadenceCalculator({ settings, venues }: { settings: Settings; venues: Venue[] }) {
   const [venueId, setVenueId] = useState(venues[0]?.id ?? '')
+  const [speedMin, setSpeedMin] = useState('53')
+  const [speedMax, setSpeedMax] = useState('70')
+  const [speedStep, setSpeedStep] = useState('0.5')
   const [searchParams] = useSearchParams()
   const highlightChainring = Number(searchParams.get('chainring'))
   const highlightCog = Number(searchParams.get('cog'))
@@ -37,24 +47,48 @@ export default function CadenceCalculator({ settings, venues }: { settings: Sett
 
   if (!venue) return <p className="text-sm text-slate-500">Add a venue in Settings first.</p>
 
-  const grid = cadenceGrid(gears, venue.lapLengthM, settings.rolloutM)
+  // Build the speed rows (km/h), then derive each row's lap time on this venue:
+  // lapTime = lapLength / (speed in m/s). Descending speed puts the fastest laps on top.
+  const min = Number(speedMin)
+  const max = Number(speedMax)
+  const step = Number(speedStep)
+  const speedsKph: number[] = []
+  if (Number.isFinite(min) && Number.isFinite(max) && step > 0.01 && max >= min) {
+    for (let v = max; v >= min - 1e-9 && speedsKph.length < 200; v -= step) speedsKph.push(v)
+  }
+  const lapTimesS = speedsKph.map((kph) => venue.lapLengthM / (kph * KPH_TO_MS))
+  const grid = cadenceGrid(gears, venue.lapLengthM, settings.rolloutM, lapTimesS)
+  const rangeValid = speedsKph.length > 0
 
   return (
     <div className="space-y-4">
-      <label className="block text-sm sm:w-64">
-        <span className="font-medium text-slate-700">Venue (lap length)</span>
-        <select
-          value={venue.id}
-          onChange={(e) => setVenueId(e.target.value)}
-          className="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
-        >
-          {venues.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.name} ({v.lapLengthM} m)
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="flex flex-wrap gap-3">
+        <label className="block text-sm sm:w-64">
+          <span className="font-medium text-slate-700">Venue (lap length)</span>
+          <select
+            value={venue.id}
+            onChange={(e) => setVenueId(e.target.value)}
+            className="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+          >
+            {venues.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name} ({v.lapLengthM} m)
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-sm">
+          <span className="font-medium text-slate-700">Speed range (km/h)</span>
+          <div className="mt-1 flex gap-1">
+            <input type="number" step="0.5" value={speedMin} onChange={(e) => setSpeedMin(e.target.value)} className={rangeInputClass} />
+            <input type="number" step="0.5" value={speedMax} onChange={(e) => setSpeedMax(e.target.value)} className={rangeInputClass} />
+          </div>
+        </label>
+        <label className="block text-sm">
+          <span className="font-medium text-slate-700">Step (km/h)</span>
+          <input type="number" step="0.1" value={speedStep} onChange={(e) => setSpeedStep(e.target.value)} className={`mt-1 w-24 ${rangeInputClass}`} />
+        </label>
+      </div>
 
       <div className="space-y-2">
         <T as="h3" className="text-sm font-semibold text-slate-900" id="calculators.cadencecalculator.gear-inventory" d="Gear inventory" />
@@ -89,44 +123,54 @@ export default function CadenceCalculator({ settings, venues }: { settings: Sett
         </div>
       </div>
 
-      <div className="max-h-96 overflow-auto rounded-xl border border-slate-200">
-        <table className="min-w-full divide-y divide-slate-200 text-xs">
-          <thead className="sticky top-0 bg-slate-50">
-            <tr>
-              <th className="px-2 py-1 text-right font-medium text-slate-600">Lap time (s)</th>
-              {gears.map((g, i) => (
-                <th
-                  key={i}
-                  className={`px-2 py-1 text-right font-medium ${
-                    g.chainring === highlightChainring && g.cog === highlightCog ? 'bg-amber-100 text-amber-900' : 'text-slate-600'
-                  }`}
-                >
-                  {g.chainring}×{g.cog}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {grid.lapTimesS.map((lt, r) => (
-              <tr key={r}>
-                <td className="px-2 py-1 text-right font-mono text-slate-700">{lt.toFixed(1)}</td>
-                {grid.cells[r].map((rpm, c) => (
-                  <td
-                    key={c}
-                    className={`px-2 py-1 text-right font-mono ${
-                      gears[c].chainring === highlightChainring && gears[c].cog === highlightCog
-                        ? 'bg-amber-50 text-amber-900'
-                        : 'text-slate-800'
+      {rangeValid ? (
+        <div className="max-h-96 overflow-auto rounded-xl border border-slate-200">
+          <table className="min-w-full divide-y divide-slate-200 text-xs">
+            <thead className="sticky top-0 bg-slate-50">
+              <tr>
+                <th className="px-2 py-1 text-right font-medium text-slate-600">Speed (km/h)</th>
+                <th className="px-2 py-1 text-right font-medium text-slate-600">Lap time (s)</th>
+                {gears.map((g, i) => (
+                  <th
+                    key={i}
+                    className={`px-2 py-1 text-right font-medium ${
+                      g.chainring === highlightChainring && g.cog === highlightCog ? 'bg-amber-100 text-amber-900' : 'text-slate-600'
                     }`}
                   >
-                    {rpm.toFixed(1)}
-                  </td>
+                    {g.chainring}×{g.cog}
+                  </th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {grid.lapTimesS.map((lt, r) => (
+                <tr key={r}>
+                  <td className="px-2 py-1 text-right font-mono font-medium text-slate-700">{speedsKph[r].toFixed(1)}</td>
+                  <td className="px-2 py-1 text-right font-mono text-slate-700">{lt.toFixed(2)}</td>
+                  {grid.cells[r].map((rpm, c) => (
+                    <td
+                      key={c}
+                      className={`px-2 py-1 text-right font-mono ${
+                        gears[c].chainring === highlightChainring && gears[c].cog === highlightCog
+                          ? 'bg-amber-50 text-amber-900'
+                          : 'text-slate-800'
+                      }`}
+                    >
+                      {rpm.toFixed(1)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="text-sm text-slate-500">Enter a valid speed range (min ≤ max, step &gt; 0) to see the grid.</p>
+      )}
+      <p className="text-xs text-slate-500">
+        Speed sets each row; lap time = lap length ÷ speed on the selected venue, and cadence follows
+        from the lap time and gear.
+      </p>
     </div>
   )
 }
