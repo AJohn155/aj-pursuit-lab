@@ -140,7 +140,7 @@ export default function RidesList() {
                     <Link
                       to={`/rides/${ride.id}`}
                       title="Official lap splits sharpen line height and anchor the Compare gap chart — add them in Edit details."
-                      className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 hover:bg-amber-200"
+                      className="ml-2 whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 hover:bg-amber-200"
                     >
                       no splits
                     </Link>
