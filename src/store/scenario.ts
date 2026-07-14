@@ -544,6 +544,9 @@ export function scenarioToFullAnalysis(
     cdaRaceM2: resolved.cdaM2,
     cdaCi95: 0,
     cdaPerLapM2: lapResults.map((l) => l.cda),
+    // Synthetic: the scenario's CdA is an input, not a windowed estimate — report the
+    // conventional steady window for display consistency.
+    cdaWindowLaps: lapResults.map((_, i) => i + 1).filter((n) => n >= 3 && n <= 15),
     startMetrics: { startEnergyJ: 0, timeToFirstPowerS: 0, firstPowerVComMs: detection.startVComMs },
     reproduction: { simTimeS: run.predictedTimeS, officialTimeS: run.predictedTimeS, deltaS: 0 },
   }

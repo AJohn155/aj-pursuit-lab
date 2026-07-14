@@ -144,7 +144,13 @@ export default function RideDetail() {
       <RideSummary ride={ride} full={full} />
       <Traces t={full.base.timeline.t} v={full.base.timeline.v} p={full.base.timeline.p} cad={full.base.timeline.cad} t0={full.base.detection.t0} />
       <LapTable laps={full.analysisResult.laps} officialSplits={ride.officialSplits} construction={full.base.laps} />
-      <CdaCharts laps={full.analysisResult.laps} rolling={full.rolling} />
+      <CdaCharts
+        laps={full.analysisResult.laps}
+        rolling={full.rolling}
+        windowLaps={full.base.cdaWindowLaps}
+        catchLap={ride.flags.caughtRider ? ride.caughtAtLap : undefined}
+        lapLengthM={venue.lapLengthM}
+      />
       <StartPanel startMetrics={full.analysisResult.startMetrics} />
       <WBalChart curve={full.wBalCurve} />
       <OverlayChart overlay={full.overlay} geometry={full.geometry} lapLengthM={venue.lapLengthM} />

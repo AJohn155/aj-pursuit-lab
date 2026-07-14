@@ -175,8 +175,16 @@ export interface CdaRaceResult {
 
 /**
  * cdaRace over a steady window given as per-lap sample groups. cdaRace is the energy
- * balance over the concatenated window (not the mean of per-lap CdAs); the CI comes from
- * the per-lap distribution (SPEC §4.9).
+ * balance over the whole window (not the mean of per-lap CdAs); the CI comes from the
+ * per-lap distribution (SPEC §4.9).
+ *
+ * With `boundaryVComs`, the balance is assembled by SUMMING each lap's exact-boundary
+ * breakdown (E_in, ΔKE, E_roll, aero denominator). For a contiguous window this is
+ * identical to the concatenated balance — the interior ΔKE terms telescope exactly, since
+ * adjacent laps share the same interpolated lap-line speed — but it stays correct when
+ * the window has HOLES (laps excluded for a caught rider, owner request 2026-07 round 6):
+ * a concatenated balance would silently miss the ΔKE jumps across each gap. Without
+ * boundary speeds, the legacy concatenated form is used (contiguous windows only).
  */
 export function cdaRace(
   laps: Sample[][],
@@ -185,16 +193,49 @@ export function cdaRace(
   track: TrackModel,
   boundaryVComs?: BoundaryVCom[],
 ): CdaRaceResult {
-  const samples = laps.flat()
-  const breakdown = energyBalanceCda({
-    samples,
-    rho,
-    params,
-    track,
-    vComStartOverrideMs: finiteOrUndef(boundaryVComs?.[0]?.startMs),
-    vComEndOverrideMs: finiteOrUndef(boundaryVComs?.at(-1)?.endMs),
-  })
   const perLap = cdaPerLap(laps, rho, params, track, boundaryVComs)
+
+  const haveAllBounds =
+    boundaryVComs != null &&
+    boundaryVComs.length === laps.length &&
+    boundaryVComs.every((b) => Number.isFinite(b.startMs) && Number.isFinite(b.endMs))
+
+  let breakdown: CdaBreakdown
+  if (haveAllBounds) {
+    const acc = { eInJ: 0, dKeJ: 0, eRollJ: 0, aeroDenomJ: 0 }
+    for (let i = 0; i < laps.length; i++) {
+      const b = energyBalanceCda({
+        samples: laps[i],
+        rho,
+        params,
+        track,
+        vComStartOverrideMs: boundaryVComs[i].startMs,
+        vComEndOverrideMs: boundaryVComs[i].endMs,
+      })
+      acc.eInJ += b.eInJ
+      acc.dKeJ += b.dKeJ
+      acc.eRollJ += b.eRollJ
+      acc.aeroDenomJ += b.aeroDenomJ
+    }
+    const eAeroJ = acc.eInJ - acc.dKeJ - acc.eRollJ
+    breakdown = {
+      cdaM2: eAeroJ / acc.aeroDenomJ,
+      ...acc,
+      eAeroJ,
+      vComStartMs: boundaryVComs[0]?.startMs ?? Number.NaN,
+      vComEndMs: boundaryVComs.at(-1)?.endMs ?? Number.NaN,
+    }
+  } else {
+    const samples = laps.flat()
+    breakdown = energyBalanceCda({
+      samples,
+      rho,
+      params,
+      track,
+      vComStartOverrideMs: finiteOrUndef(boundaryVComs?.[0]?.startMs),
+      vComEndOverrideMs: finiteOrUndef(boundaryVComs?.at(-1)?.endMs),
+    })
+  }
   return { cdaRace: breakdown.cdaM2, ci95: ci95FromScatter(perLap), perLap, breakdown }
 }
 

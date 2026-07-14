@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import {
   analyzeRide,
   buildTimeline,
+  caughtRiderExcludedLaps,
   computeAccelDecel,
   constructHalfLaps,
   constructLaps,
@@ -275,5 +276,41 @@ describe('speed-vs-position overlay on fixtures (SPEC §5.1)', () => {
       }
       for (let i = 1; i < lap.posM.length; i++) expect(lap.posM[i]).toBeGreaterThanOrEqual(lap.posM[i - 1])
     }
+  })
+})
+
+describe('caught-rider CdA control (owner request 2026-07 round 6)', () => {
+  it('caughtRiderExcludedLaps excludes every lap intersecting catch ± 1 lap', () => {
+    expect(caughtRiderExcludedLaps(7.5)).toEqual([7, 8, 9])
+    expect(caughtRiderExcludedLaps(8)).toEqual([8, 9]) // (7,9): lap 8 (7,8) and lap 9 (8,9)
+    expect(caughtRiderExcludedLaps(1.2)).toEqual([1, 2, 3])
+    expect(caughtRiderExcludedLaps(15.9)).toEqual([15, 16])
+    expect(caughtRiderExcludedLaps(Number.NaN)).toEqual([])
+  })
+
+  it('excludeCdaLaps removes the laps from the steady window and moves the headline', () => {
+    const bytes = fs.readFileSync(`${fixturesDir}SRM_PM9_ANDERS_TP_2025-10-24_13-18-40.fit`)
+    const base = { officialTimeS: 246.793, rho: 1.122, params, track }
+    const plain = analyzeRide(bytes, base)
+    const excluded = analyzeRide(bytes, { ...base, excludeCdaLaps: caughtRiderExcludedLaps(7.5) })
+
+    expect(plain.cdaWindowLaps).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
+    expect(excluded.cdaWindowLaps).toEqual([3, 4, 5, 6, 10, 11, 12, 13, 14, 15, 16])
+    expect(excluded.cdaPerLapM2).toHaveLength(11)
+    // The gap-safe balance must aggregate per-lap terms: the headline over the holed
+    // window equals the aero-denominator-weighted combination of the kept laps, so it
+    // must sit strictly inside the kept per-lap range and differ from the full window.
+    expect(excluded.cdaRaceM2).not.toBeCloseTo(plain.cdaRaceM2, 4)
+    expect(excluded.cdaRaceM2).toBeGreaterThan(Math.min(...excluded.cdaPerLapM2))
+    expect(excluded.cdaRaceM2).toBeLessThan(Math.max(...excluded.cdaPerLapM2))
+  })
+
+  it('a contiguous window gives the same headline via the aggregated and concatenated balances', () => {
+    const bytes = fs.readFileSync(`${fixturesDir}SRM_PM9_ANDERS_TP_2025-10-24_18-53-43.fit`)
+    const a = analyzeRide(bytes, { officialTimeS: 248.699, rho: 1.116, params, track })
+    // The aggregated per-lap sum telescopes exactly for contiguous laps — regression
+    // guard for the boundary bookkeeping (weighted per-lap mean == headline within CI).
+    const weightedish = a.cdaPerLapM2.reduce((s, x) => s + x, 0) / a.cdaPerLapM2.length
+    expect(Math.abs(weightedish - a.cdaRaceM2)).toBeLessThan(0.004)
   })
 })

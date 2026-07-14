@@ -10,17 +10,32 @@ import { T } from '../../../components/EditableText'
 const RACE_DISTANCE_M = 4000
 const STEADY_FIRST_LAP = 3
 
+/** "laps 3–15", or "laps 3–15 excl. 7–9" when the window has caught-rider holes. */
+function describeWindow(windowLaps: number[]): string {
+  if (windowLaps.length === 0) return 'steady laps'
+  const lo = windowLaps[0]
+  const hi = windowLaps[windowLaps.length - 1]
+  const missing: number[] = []
+  for (let n = lo; n <= hi; n++) if (!windowLaps.includes(n)) missing.push(n)
+  const base = `laps ${lo}–${hi}`
+  if (missing.length === 0) return base
+  const runLabel =
+    missing.length === 1 ? `${missing[0]}` : `${missing[0]}–${missing[missing.length - 1]}`
+  return `${base} excl. ${runLabel}`
+}
+
 export default function RideSummary({ ride, full }: { ride: Ride; full: FullRideAnalysis }) {
   const r = full.analysisResult
   const avgSpeedKmh = (RACE_DISTANCE_M / ride.officialTimeS) * 3.6
+  const windowText = describeWindow(full.base.cdaWindowLaps)
 
   const stats: { label: string; value: string; hint?: string }[] = [
     { label: 'Official time', value: `${ride.officialTimeS.toFixed(3)} s` },
     { label: 'Avg speed', value: `${avgSpeedKmh.toFixed(2)} km/h` },
     {
-      label: 'CdA (laps 3–16)',
+      label: `CdA (${windowText})`,
       value: `${r.cdaRace.toFixed(4)} m²`,
-      hint: `± ${r.ci.toFixed(4)} (95% CI)`,
+      hint: `± ${r.ci.toFixed(4)} (95% CI)${ride.flags.caughtRider && ride.caughtAtLap != null ? ' · catch laps excluded' : ''}`,
     },
     {
       label: 'Avg power',
@@ -57,7 +72,7 @@ export default function RideSummary({ ride, full }: { ride: Ride; full: FullRide
         ))}
       </div>
       <p className="mt-3 text-sm leading-relaxed text-slate-600">{narrative(ride, full)}</p>
-      <T as="p" className="mt-1 text-xs text-slate-400" id="rides.ridedetail.summary.convention-note" d="Power conventions: “avg power” averages recorded samples (SRM-style, the app-wide convention); “excl. lap 1” averages from the lap-2 line to the finish. CdA is the single energy balance over laps 3–16 — the number the per-lap chart scatters around." />
+      <T as="p" className="mt-1 text-xs text-slate-400" id="rides.ridedetail.summary.convention-note" d="Power conventions: “avg power” averages recorded samples (SRM-style, the app-wide convention); “excl. lap 1” averages from the lap-2 line to the finish. CdA is the single energy balance over the steady window (laps 3–16, minus any caught-rider laps) — the number the per-lap chart scatters around. Lap 16 stays in deliberately: its high CdA is usually real fatigue drag (excluding it breaks the sim’s reproduction of the ride)." />
     </section>
   )
 }
@@ -109,8 +124,12 @@ function narrative(ride: Ride, full: FullRideAnalysis): string {
     else parts.push(`~${(wEnd / 1000).toFixed(1)} kJ of W′ was left at the line.`)
   }
 
+  const catchNote =
+    ride.flags.caughtRider && ride.caughtAtLap != null
+      ? ` (laps around the lap-${ride.caughtAtLap} catch excluded — draft + passing line aren't your own aero)`
+      : ''
   parts.push(
-    `Total CdA ${r.cdaRace.toFixed(4)} ± ${r.ci.toFixed(4)} m²${ride.speedSource === 'cadence' ? ' (speed reconstructed from cadence × gear — treat aero numbers with care)' : ''}.`,
+    `Total CdA ${r.cdaRace.toFixed(4)} ± ${r.ci.toFixed(4)} m²${catchNote}${ride.speedSource === 'cadence' ? ' (speed reconstructed from cadence × gear — treat aero numbers with care)' : ''}.`,
   )
 
   return parts.join(' ')

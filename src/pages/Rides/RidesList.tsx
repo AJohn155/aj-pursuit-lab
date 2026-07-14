@@ -134,6 +134,17 @@ export default function RidesList() {
                   <Link to={`/rides/${ride.id}`} className="font-medium text-slate-900 hover:underline">
                     {ride.eventName || 'Untitled ride'}
                   </Link>
+                  {/* Splits drive line-height precision and gap-chart anchoring — nudge
+                      while the timing sheet is still at hand (owner round 6, item 1). */}
+                  {ride.fitFileB64 && ride.officialSplits.length === 0 && (
+                    <Link
+                      to={`/rides/${ride.id}`}
+                      title="Official lap splits sharpen line height and anchor the Compare gap chart — add them in Edit details."
+                      className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 hover:bg-amber-200"
+                    >
+                      no splits
+                    </Link>
+                  )}
                   <p className="text-xs text-slate-500">{venueName}</p>
                 </td>
                 <td className="px-3 py-2 text-slate-600">

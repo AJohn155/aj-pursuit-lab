@@ -155,6 +155,14 @@ export interface Ride extends Persisted {
   kit: string[]
   notes: string
   flags: { outdoor: boolean; caughtRider: boolean; interrupted: boolean }
+  /**
+   * Where another rider was caught, in laps from the start (e.g. 7.5 = mid-lap-8), owner
+   * request 2026-07 round 6. Only meaningful with flags.caughtRider. Drives the CdA
+   * control: laps within ±1 lap of the catch are excluded from the steady CdA window
+   * (draft on approach + off-line pass aren't the rider's own aero) and shaded on the
+   * rolling-CdA chart.
+   */
+  caughtAtLap?: number
   result?: string
   fitFileB64?: string
   analysis?: AnalysisResult

@@ -62,6 +62,11 @@ function EditRidePanelInner({
   const [crrInput, setCrrInput] = useState(String(ride.tyreCrr ?? settings.tyreCrr))
   const [etaInput, setEtaInput] = useState(String(ride.mechEfficiency ?? settings.mechEfficiency))
   const [rolloutInput, setRolloutInput] = useState(String(ride.rolloutM ?? settings.rolloutM))
+  // Ride flags (round 6: these were not editable after upload — the owner couldn't fix a
+  // missed "caught rider" tick). Outdoor stays venue-derived, so only these two are shown.
+  const [caughtRider, setCaughtRider] = useState(ride.flags.caughtRider)
+  const [caughtAtLap, setCaughtAtLap] = useState(ride.caughtAtLap != null ? String(ride.caughtAtLap) : '')
+  const [interrupted, setInterrupted] = useState(ride.flags.interrupted)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -88,6 +93,11 @@ function EditRidePanelInner({
       setError('Mass, air density, Crr, efficiency (0–1], and rollout must all be positive numbers.')
       return
     }
+    const caughtAtLapVal = caughtAtLap.trim() === '' ? undefined : Number.parseFloat(caughtAtLap)
+    if (caughtRider && caughtAtLapVal != null && !(caughtAtLapVal > 0 && caughtAtLapVal <= 16)) {
+      setError('“Caught at lap” must be between 0 and 16 (e.g. 7.5), or left blank.')
+      return
+    }
 
     const updated: Ride = {
       ...ride,
@@ -105,7 +115,8 @@ function EditRidePanelInner({
       tyreCrr: crr,
       mechEfficiency: eta,
       rolloutM: rollout,
-      flags: { ...ride.flags, outdoor: !venue.indoor },
+      flags: { outdoor: !venue.indoor, caughtRider, interrupted },
+      caughtAtLap: caughtRider ? caughtAtLapVal : undefined,
       updatedAt: new Date().toISOString(),
     }
 
@@ -203,6 +214,34 @@ function EditRidePanelInner({
         <textarea value={splitsText} onChange={(e) => setSplitsText(e.target.value)} rows={2} className={inputClass} />
         {parsedSplits.error && <span className="mt-0.5 block text-xs text-red-600">{parsedSplits.error}</span>}
       </label>
+      <fieldset className="flex flex-wrap items-center gap-6 text-sm text-slate-600">
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={caughtRider} onChange={(e) => setCaughtRider(e.target.checked)} />
+          Caught rider
+        </label>
+        {caughtRider && (
+          <label className="flex items-center gap-2">
+            at lap
+            <input
+              type="number"
+              step="0.25"
+              min="1"
+              max="16"
+              value={caughtAtLap}
+              onChange={(e) => setCaughtAtLap(e.target.value)}
+              placeholder="7.5"
+              className="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm"
+            />
+            <span className="text-xs text-slate-500">
+              laps within ±1 of the catch are excluded from the CdA window (saving re-analyzes)
+            </span>
+          </label>
+        )}
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={interrupted} onChange={(e) => setInterrupted(e.target.checked)} />
+          Interrupted
+        </label>
+      </fieldset>
       <label className={labelClass}>
         <span className={labelTextClass}>Notes</span>
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className={inputClass} />

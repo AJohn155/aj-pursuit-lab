@@ -200,6 +200,27 @@ export function lapBoundaryVComs(tl: Timeline, laps: LapConstruction): BoundaryV
   return out
 }
 
+/**
+ * Laps to exclude from the steady CdA window when another rider was caught (owner request
+ * 2026-07 round 6): catching means riding through the other rider's draft on approach
+ * (CdA reads low) then coming off the racing line to pass (extra path + dirty air — CdA
+ * reads high), so the energy balance around the catch isn't the rider's own aero.
+ * Documented choice: exclude every lap whose span intersects (catchLap − 1, catchLap + 1)
+ * — e.g. a catch at lap 7.5 excludes laps 7, 8, and 9. 1-based lap numbers, clamped to
+ * [1, lapCount].
+ */
+export function caughtRiderExcludedLaps(caughtAtLap: number, lapCount = N_LAPS): number[] {
+  if (!Number.isFinite(caughtAtLap) || caughtAtLap <= 0) return []
+  const lo = caughtAtLap - 1
+  const hi = caughtAtLap + 1
+  const out: number[] = []
+  for (let n = 1; n <= lapCount; n++) {
+    // Lap n spans (n−1, n) in lap units.
+    if (n > lo && n - 1 < hi) out.push(n)
+  }
+  return out
+}
+
 /** A Sample plus its cumulative calibrated (datum) distance from the race start, m. */
 export interface DistancedSample {
   sample: Sample

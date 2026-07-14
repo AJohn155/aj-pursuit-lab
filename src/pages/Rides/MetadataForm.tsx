@@ -6,7 +6,7 @@ import type { FormEvent } from 'react'
 import { airDensity as computeAirDensity, effectiveCrr, makeTrack } from '../../engine/index'
 import type { RiderParams } from '../../engine/index'
 import { ENGINE_VERSION } from '../../engine/constants'
-import { analyzeRideFull, fitStartDate } from '../../engine/ingest'
+import { analyzeRideFull, caughtRiderExcludedLaps, fitStartDate } from '../../engine/ingest'
 import { parseSplitsText } from './splits'
 import KitPicker from '../../components/KitPicker'
 import { dataStore } from '../../store/DataStore'
@@ -90,6 +90,7 @@ function MetadataFormInner({
   const [kit, setKit] = useState<string[]>([])
   const [notes, setNotes] = useState('')
   const [caughtRider, setCaughtRider] = useState(false)
+  const [caughtAtLap, setCaughtAtLap] = useState('')
   const [interrupted, setInterrupted] = useState(false)
   const [result, setResult] = useState('')
   const [officialTimeS, setOfficialTimeS] = useState(String(detection.officialTimeS))
@@ -160,6 +161,11 @@ function MetadataFormInner({
       setError('Tyre Crr, mech. efficiency (0–1], and rollout must be positive numbers.')
       return
     }
+    const caughtAtLapVal = caughtAtLap.trim() === '' ? undefined : Number.parseFloat(caughtAtLap)
+    if (caughtRider && caughtAtLapVal != null && !(caughtAtLapVal > 0 && caughtAtLapVal <= 16)) {
+      setError('“Caught at lap” must be between 0 and 16 (e.g. 7.5), or left blank.')
+      return
+    }
     const track = makeTrack(venue.lapLengthM, venue.bendRadiusM)
     const params: RiderParams = {
       massKg,
@@ -185,6 +191,10 @@ function MetadataFormInner({
         speedFromCadence: detection.speedFromCadence
           ? { chainring, cog, rolloutM: rolloutVal }
           : undefined,
+        excludeCdaLaps:
+          caughtRider && Number.isFinite(caughtAtLapVal)
+            ? caughtRiderExcludedLaps(caughtAtLapVal as number)
+            : undefined,
       })
 
       const fitFileB64 = bytesToBase64(detection.fitBytes)
@@ -222,6 +232,7 @@ function MetadataFormInner({
         kit,
         notes,
         flags: { outdoor: !venue.indoor, caughtRider, interrupted },
+        caughtAtLap: caughtRider ? caughtAtLapVal : undefined,
         result: result || undefined,
         fitFileB64,
         analysis: full.analysisResult,
@@ -429,11 +440,29 @@ function MetadataFormInner({
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className={inputClass} />
       </label>
 
-      <fieldset className="flex gap-6 text-sm text-slate-600">
+      <fieldset className="flex flex-wrap items-center gap-6 text-sm text-slate-600">
         <label className="flex items-center gap-2">
           <input type="checkbox" checked={caughtRider} onChange={(e) => setCaughtRider(e.target.checked)} />
           Caught rider
         </label>
+        {caughtRider && (
+          <label className="flex items-center gap-2">
+            at lap
+            <input
+              type="number"
+              step="0.25"
+              min="1"
+              max="16"
+              value={caughtAtLap}
+              onChange={(e) => setCaughtAtLap(e.target.value)}
+              placeholder="7.5"
+              className="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm"
+            />
+            <span className="text-xs text-slate-500">
+              laps within ±1 of the catch are excluded from the CdA window
+            </span>
+          </label>
+        )}
         <label className="flex items-center gap-2">
           <input type="checkbox" checked={interrupted} onChange={(e) => setInterrupted(e.target.checked)} />
           Interrupted

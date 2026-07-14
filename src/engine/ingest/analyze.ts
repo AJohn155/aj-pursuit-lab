@@ -28,22 +28,37 @@ export interface AnalyzeOptions {
    * reconstruction is exact up to integer-rpm rounding.
    */
   speedFromCadence?: { chainring: number; cog: number; rolloutM: number }
+  /**
+   * 1-based laps to drop from the steady CdA window (owner request 2026-07 round 6) —
+   * e.g. the laps around catching another rider (caughtRiderExcludedLaps), whose energy
+   * balance reflects draft + passing line rather than the rider's own aero. The per-lap
+   * table still reports them; only cdaRace/CI skip them.
+   */
+  excludeCdaLaps?: number[]
 }
 
 export interface RideAnalysis {
   timeline: Timeline
   detection: Detection
   laps: LapConstruction
-  /** cdaRace over the steady window (laps 3 → last full lap), m². */
+  /** cdaRace over the steady window (laps 3–16 minus any exclusions), m². */
   cdaRaceM2: number
   cdaCi95: number
   cdaPerLapM2: number[]
+  /** The 1-based laps the steady CdA window actually used (3–16 minus exclusions/gaps). */
+  cdaWindowLaps: number[]
   startMetrics: StartMetrics
   reproduction: ReproResult
 }
 
-/** §4.9 default steady window: laps 3 → last full lap (1-based). */
+/** Steady CdA window, 1-based (§4.9): laps 3–16. A laps 3–15 window was TRIED and rejected
+ * (owner question 2026-07 round 6): on the quali fixture it halves the CI (lap 16 reads
+ * 0.2096 vs ~0.167 scatter) but breaks the §7.5 sim-reproduction gate (delta −0.88 s →
+ * −1.91 s) — lap 16's high CdA sits on the ride's real fatigue-drift trend, so excluding
+ * it biases the headline low against the ride it must reproduce. Unlike line height
+ * (a boundary-geometry quantity), the last lap's aero is mostly signal. */
 const STEADY_FIRST_LAP = 3
+const STEADY_LAST_LAP = 16
 const MIN_VALID_POWER_W = 100
 const RACE_DISTANCE_M = 4000
 
@@ -64,9 +79,14 @@ export function analyzeRide(content: ArrayBuffer | Uint8Array, opts: AnalyzeOpti
   // every lap, which biased every per-lap CdA high (2026-07 round 5 item 1). Kept aligned
   // with the groups by filtering both on the same predicate.
   const allBounds = lapBoundaryVComs(timeline, laps)
-  const keep = groups.map((g, ln) => ln >= STEADY_FIRST_LAP - 1 && g.length > 0)
+  const excluded = new Set(opts.excludeCdaLaps ?? [])
+  const keep = groups.map(
+    (g, ln) =>
+      ln + 1 >= STEADY_FIRST_LAP && ln + 1 <= STEADY_LAST_LAP && !excluded.has(ln + 1) && g.length > 0,
+  )
   const steady = groups.filter((_, ln) => keep[ln])
   const boundaryVComs = allBounds.filter((_, ln) => keep[ln])
+  const cdaWindowLaps = keep.flatMap((k, ln) => (k ? [ln + 1] : []))
   const cda = cdaRace(steady, opts.rho, opts.params, opts.track, boundaryVComs)
 
   const startMetrics = reconstructStart(timeline, detection, laps, opts.params, opts.rho, cda.cdaRace)
@@ -79,6 +99,7 @@ export function analyzeRide(content: ArrayBuffer | Uint8Array, opts: AnalyzeOpti
     cdaRaceM2: cda.cdaRace,
     cdaCi95: cda.ci95,
     cdaPerLapM2: cda.perLap,
+    cdaWindowLaps,
     startMetrics,
     reproduction,
   }
