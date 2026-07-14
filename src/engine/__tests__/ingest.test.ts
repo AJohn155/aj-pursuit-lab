@@ -294,9 +294,9 @@ describe('caught-rider CdA control (owner request 2026-07 round 6)', () => {
     const plain = analyzeRide(bytes, base)
     const excluded = analyzeRide(bytes, { ...base, excludeCdaLaps: caughtRiderExcludedLaps(7.5) })
 
-    expect(plain.cdaWindowLaps).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
-    expect(excluded.cdaWindowLaps).toEqual([3, 4, 5, 6, 10, 11, 12, 13, 14, 15, 16])
-    expect(excluded.cdaPerLapM2).toHaveLength(11)
+    expect(plain.cdaWindowLaps).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
+    expect(excluded.cdaWindowLaps).toEqual([3, 4, 5, 6, 10, 11, 12, 13, 14, 15])
+    expect(excluded.cdaPerLapM2).toHaveLength(10)
     // The gap-safe balance must aggregate per-lap terms: the headline over the holed
     // window equals the aero-denominator-weighted combination of the kept laps, so it
     // must sit strictly inside the kept per-lap range and differ from the full window.

@@ -36,23 +36,40 @@ const DEFAULT_STATE: OverrideFormState = {
   startLapInput: '21.5',
 }
 
+/** A field only becomes an override once it holds a positive finite number — typing the
+ * "0" of "0.17" (owner bug report 2026-07 round 7: the page went blank) must keep the
+ * baseline value, not simulate zero drag. */
+function positive(input: string): number | undefined {
+  if (input === '') return undefined
+  const v = Number(input)
+  return Number.isFinite(v) && v > 0 ? v : undefined
+}
+
 function buildOverrides(state: OverrideFormState): Scenario['overrides'] {
+  // Keys are only ever set to defined values (never explicit undefined) — Firestore sync
+  // rejects undefined fields on saved scenarios.
   const o: Scenario['overrides'] = {}
-  if (state.cdaInput !== '') o.cdA = Number(state.cdaInput)
-  if (state.crrInput !== '') o.crr = Number(state.crrInput)
-  if (state.massInput !== '') o.massKg = Number(state.massInput)
-  if (state.densityInput !== '') o.airDensity = Number(state.densityInput)
+  const cdA = positive(state.cdaInput)
+  if (cdA != null) o.cdA = cdA
+  const crr = positive(state.crrInput)
+  if (crr != null) o.crr = crr
+  const massKg = positive(state.massInput)
+  if (massKg != null) o.massKg = massKg
+  const airDensity = positive(state.densityInput)
+  if (airDensity != null) o.airDensity = airDensity
   if (state.venueOverride) o.venueId = state.venueOverride
-  o.gear = { chainring: state.chainring, cog: state.cog }
+  if (state.chainring > 0 && state.cog > 0) o.gear = { chainring: state.chainring, cog: state.cog }
   const isBlank = state.baselineRef === 'blank'
   // Blank baselines are always start-split (no recording to scale); the UI enforces this
   // but the state can lag a baseline switch by one event.
   if (state.powerMode === 'startSplit' || isBlank) {
-    if (state.constantPowerInput !== '') o.avgPowerW = Number(state.constantPowerInput)
-    const startLap = Number(state.startLapInput)
-    if (state.startLapInput !== '' && Number.isFinite(startLap) && startLap > 0) o.startLapS = startLap
+    const avgPowerW = positive(state.constantPowerInput)
+    if (avgPowerW != null) o.avgPowerW = avgPowerW
+    const startLapS = positive(state.startLapInput)
+    if (startLapS != null) o.startLapS = startLapS
   } else if (state.powerScalePct !== '' && state.powerScalePct !== '100') {
-    o.powerScale = Number(state.powerScalePct) / 100
+    const scale = positive(state.powerScalePct)
+    if (scale != null) o.powerScale = scale / 100
   }
   return o
 }
@@ -117,13 +134,31 @@ export default function Adjuster() {
     return resolveScenario(baseline, {}, settings, venues)
   }, [baseline, settings, venues])
 
-  const resolved: ResolvedScenario | null = useMemo(() => {
-    if (!baseline || !settings) return null
-    return resolveScenario(baseline, overrides, settings, venues)
+  // The live simulation runs on every keystroke — a value the guards above didn't
+  // anticipate must degrade to "no prediction", never take down the whole page (owner bug
+  // report 2026-07 round 7: typing in the CdA field blanked the app).
+  const { resolved, run, simError } = useMemo((): {
+    resolved: ResolvedScenario | null
+    run: ReturnType<typeof runScenario> | null
+    simError: string | null
+  } => {
+    if (!baseline || !settings) return { resolved: null, run: null, simError: null }
+    try {
+      const resolved = resolveScenario(baseline, overrides, settings, venues)
+      return { resolved, run: runScenario(resolved), simError: null }
+    } catch (e) {
+      return { resolved: null, run: null, simError: e instanceof Error ? e.message : String(e) }
+    }
   }, [baseline, overrides, settings, venues])
 
-  const run = useMemo(() => (resolved ? runScenario(resolved) : null), [resolved])
-  const baselineRun = useMemo(() => (baselineSnapshot ? runScenario(baselineSnapshot) : null), [baselineSnapshot])
+  const baselineRun = useMemo(() => {
+    if (!baselineSnapshot) return null
+    try {
+      return runScenario(baselineSnapshot)
+    } catch {
+      return null
+    }
+  }, [baselineSnapshot])
 
   function handleApplySolved(key: SolveKey, value: number) {
     switch (key) {
@@ -272,6 +307,12 @@ export default function Adjuster() {
 
       {baselineError && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{baselineError}</div>
+      )}
+      {simError && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          These values can't be simulated yet ({simError}) — finish typing or correct the field; the
+          prediction resumes automatically.
+        </div>
       )}
 
       <OverrideForm

@@ -41,24 +41,30 @@ export interface RideAnalysis {
   timeline: Timeline
   detection: Detection
   laps: LapConstruction
-  /** cdaRace over the steady window (laps 3–16 minus any exclusions), m². */
+  /** cdaRace over the steady window (laps 3–15 minus any exclusions), m². */
   cdaRaceM2: number
   cdaCi95: number
   cdaPerLapM2: number[]
-  /** The 1-based laps the steady CdA window actually used (3–16 minus exclusions/gaps). */
+  /** The 1-based laps the steady CdA window actually used (3–15 minus exclusions/gaps). */
   cdaWindowLaps: number[]
   startMetrics: StartMetrics
   reproduction: ReproResult
 }
 
-/** Steady CdA window, 1-based (§4.9): laps 3–16. A laps 3–15 window was TRIED and rejected
- * (owner question 2026-07 round 6): on the quali fixture it halves the CI (lap 16 reads
- * 0.2096 vs ~0.167 scatter) but breaks the §7.5 sim-reproduction gate (delta −0.88 s →
- * −1.91 s) — lap 16's high CdA sits on the ride's real fatigue-drift trend, so excluding
- * it biases the headline low against the ride it must reproduce. Unlike line height
- * (a boundary-geometry quantity), the last lap's aero is mostly signal. */
+/** Steady CdA window, 1-based (owner convention 2026-07 round 7): laps 3–15. Laps 1–2 are
+ * standing-start; lap 16 is excluded because its END boundary sits at t0 + officialTime —
+ * it inherits the FULL start-anchor error (±1 s typical; up to ~2.5 s on missing-start
+ * files), and an error there lands in the post-line coast-down where the balance misreads
+ * deceleration as drag. Forensics on the quali fixture (missing start): recorded power
+ * collapses 271→85→32 W over the 3 s BEFORE the constructed boundary while speed falls
+ * 16.4→14.8 m/s — the boundary is ~2–3 s past the true line, and lap-16 CdA moves
+ * +0.028 m² per +1 s of boundary error (vs ±0.019 symmetric for an interior lap). The
+ * final fixture (clean start, pedaled through the line) shows a normal lap 16 either way.
+ * Same reasoning as the line-height interior convention. Round 6 briefly kept lap 16 on a
+ * sim-reproduction argument; that repro shares the same t0 anchor, so it couldn't
+ * arbitrate — see PROGRESS 2026-07-13/14. */
 const STEADY_FIRST_LAP = 3
-const STEADY_LAST_LAP = 16
+const STEADY_LAST_LAP = 15
 const MIN_VALID_POWER_W = 100
 const RACE_DISTANCE_M = 4000
 

@@ -72,7 +72,7 @@ export default function RideSummary({ ride, full }: { ride: Ride; full: FullRide
         ))}
       </div>
       <p className="mt-3 text-sm leading-relaxed text-slate-600">{narrative(ride, full)}</p>
-      <T as="p" className="mt-1 text-xs text-slate-400" id="rides.ridedetail.summary.convention-note" d="Power conventions: “avg power” averages recorded samples (SRM-style, the app-wide convention); “excl. lap 1” averages from the lap-2 line to the finish. CdA is the single energy balance over the steady window (laps 3–16, minus any caught-rider laps) — the number the per-lap chart scatters around. Lap 16 stays in deliberately: its high CdA is usually real fatigue drag (excluding it breaks the sim’s reproduction of the ride)." />
+      <T as="p" className="mt-1 text-xs text-slate-400" id="rides.ridedetail.summary.convention-note" d="Power conventions: “avg power” averages recorded samples (SRM-style, the app-wide convention); “excl. lap 1” averages from the lap-2 line to the finish. CdA is the single energy balance over the steady window (laps 3–15, minus any caught-rider laps) — the number the per-lap chart scatters around. Lap 16 is excluded like line height: its end boundary inherits the start-anchor timing error, and an error there lands in the post-line coast-down, which the balance misreads as drag." />
     </section>
   )
 }

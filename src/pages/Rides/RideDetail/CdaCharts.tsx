@@ -87,7 +87,7 @@ export default function CdaCharts({
           }}
           height={260}
         />
-        <T as="p" className="mt-1 text-xs text-slate-400" id="rides.ridedetail.cdacharts.axis-is-scaled-to-the" d="Axis is scaled to the headline window's laps; grey bars are outside the window — laps 1–2 (standing start, usually clipping the axis) and any caught-rider exclusions. The headline CdA and trendline use the violet laps only." />
+        <T as="p" className="mt-1 text-xs text-slate-400" id="rides.ridedetail.cdacharts.axis-is-scaled-to-the" d="Axis is scaled to the headline window's laps; grey bars are outside the window — laps 1–2 (standing start, usually clipping the axis), lap 16 (its end boundary inherits the start-anchor timing error and can include post-line coast-down), and any caught-rider exclusions. The headline CdA and trendline use the violet laps only." />
       </div>
       <div>
         <T as="h2" className="text-sm font-semibold text-slate-900" id="rides.ridedetail.cdacharts.rolling-cda-2-lap-window" d="Rolling CdA (2-lap window)" />
