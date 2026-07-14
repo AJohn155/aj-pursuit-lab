@@ -22,6 +22,9 @@ export interface QualityInputs {
   cdaM2?: number
   /** True when air density came from a measurement (direct or T/P/RH), not a default. */
   densityKnown: boolean
+  /** True when the speed/distance channels were reconstructed from cadence × gear
+   * (speedFallback.ts) because the recorded speed was broken. */
+  speedFromCadence?: boolean
 }
 
 export interface QualityFlag {
@@ -33,6 +36,7 @@ export interface QualityFlag {
     | 'cda-range'
     | 'density-missing'
     | 'interpolated-fraction'
+    | 'speed-from-cadence'
   message: string
   deduction: number
 }
@@ -62,6 +66,10 @@ const CDA_RANGE_DEDUCTION = 20
 const DENSITY_MISSING_DEDUCTION = 10
 const INTERP_FRACTION_CAP = 15
 const INTERP_FRACTION_SATURATION = 0.1 // fraction at which the interpolation deduction maxes out
+// Cadence-derived speed is physically exact on a fixed gear (wheel rigidly geared to the
+// cranks), but integer-rpm rounding and the recording interval soften calibration/line-
+// height precision — a small, visible deduction rather than a structural one.
+const SPEED_FROM_CADENCE_DEDUCTION = 5
 
 export function assessQuality(inputs: QualityInputs): QualityResult {
   const flags: QualityFlag[] = []
@@ -114,6 +122,14 @@ export function assessQuality(inputs: QualityInputs): QualityResult {
       code: 'density-missing',
       message: 'Air density defaulted, not measured',
       deduction: DENSITY_MISSING_DEDUCTION,
+    })
+  }
+
+  if (inputs.speedFromCadence) {
+    flags.push({
+      code: 'speed-from-cadence',
+      message: 'Speed channel was broken — speed & distance reconstructed from cadence × gear',
+      deduction: SPEED_FROM_CADENCE_DEDUCTION,
     })
   }
 

@@ -10,6 +10,7 @@
 //    14 laps (§4.7.4). This is what converts wheel speed to COM datum speed for the steady
 //    CdA (v_com = c·v_wheel; see cda.ts for why kV is not applied again).
 
+import type { BoundaryVCom } from '../cda'
 import type { Sample, TrackModel } from '../types'
 import type { Detection, LapConstruction, Timeline } from './types'
 import { crossingTime, interpAt } from './util'
@@ -178,6 +179,25 @@ export function lapSampleGroups(
     groups.push(samples)
   }
   return groups
+}
+
+/**
+ * Exact COM speed at each lap's true boundary times (the lap-line crossings), one
+ * {start,end} pair per constructed lap, NaN where a boundary is missing. Feeds the ΔKE
+ * boundary override in §4.9 CdA (see CdaInput.vComStartOverrideMs): the first/last
+ * integer-second samples of a lap group sit up to ±1 s onto the within-lap speed
+ * oscillation's slope — the same side every lap — which systematically biased every
+ * per-lap CdA high (owner report 2026-07 round 5, item 1).
+ */
+export function lapBoundaryVComs(tl: Timeline, laps: LapConstruction): BoundaryVCom[] {
+  const { t, v } = tl
+  const c = laps.calibrationInterior
+  const at = (bt: number): number => (Number.isNaN(bt) ? Number.NaN : c * interpAt(t, v, bt))
+  const out: BoundaryVCom[] = []
+  for (let ln = 0; ln < laps.lapBoundaryTimes.length - 1; ln++) {
+    out.push({ startMs: at(laps.lapBoundaryTimes[ln]), endMs: at(laps.lapBoundaryTimes[ln + 1]) })
+  }
+  return out
 }
 
 /** A Sample plus its cumulative calibrated (datum) distance from the race start, m. */

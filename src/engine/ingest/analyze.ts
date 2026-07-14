@@ -5,7 +5,8 @@ import { simulate } from '../simulate'
 import type { RiderParams, TrackModel } from '../types'
 import { detectRace } from './detect'
 import { parseFitRecords } from './fit'
-import { constructLaps, lapSampleGroups } from './laps'
+import { constructLaps, lapBoundaryVComs, lapSampleGroups } from './laps'
+import { developmentM, reconstructSpeedFromCadence } from './speedFallback'
 import { reconstructStart } from './start'
 import { buildTimeline } from './timeline'
 import type { Detection, LapConstruction, ReproResult, StartMetrics, Timeline } from './types'
@@ -20,6 +21,13 @@ export interface AnalyzeOptions {
   rho: number
   params: RiderParams
   track: TrackModel
+  /**
+   * When set, the file's speed/distance channels are DISCARDED and reconstructed from
+   * cadence × development (rollout × chainring/cog) before any analysis — the fallback for
+   * files whose speed channel is broken/aliased (see speedFallback.ts). Fixed gear, so the
+   * reconstruction is exact up to integer-rpm rounding.
+   */
+  speedFromCadence?: { chainring: number; cog: number; rolloutM: number }
 }
 
 export interface RideAnalysis {
@@ -41,14 +49,25 @@ const RACE_DISTANCE_M = 4000
 
 /** Full pipeline from raw bytes to a ride analysis. */
 export function analyzeRide(content: ArrayBuffer | Uint8Array, opts: AnalyzeOptions): RideAnalysis {
-  const records = parseFitRecords(content)
+  let records = parseFitRecords(content)
+  if (opts.speedFromCadence) {
+    const { rolloutM, chainring, cog } = opts.speedFromCadence
+    records = reconstructSpeedFromCadence(records, developmentM(rolloutM, chainring, cog))
+  }
   const timeline = buildTimeline(records)
   const detection = detectRace(timeline, opts.officialTimeS)
   const laps = constructLaps(timeline, detection, opts.officialTimeS, opts.officialSplits)
 
   const groups = lapSampleGroups(timeline, laps, opts.track)
-  const steady = groups.slice(STEADY_FIRST_LAP - 1).filter((g) => g.length > 0)
-  const cda = cdaRace(steady, opts.rho, opts.params, opts.track)
+  // Exact COM speeds at each lap's true boundary times, for the ΔKE terms — the first/last
+  // integer-second samples sit up to ±1 s onto the within-lap speed slope, the same side
+  // every lap, which biased every per-lap CdA high (2026-07 round 5 item 1). Kept aligned
+  // with the groups by filtering both on the same predicate.
+  const allBounds = lapBoundaryVComs(timeline, laps)
+  const keep = groups.map((g, ln) => ln >= STEADY_FIRST_LAP - 1 && g.length > 0)
+  const steady = groups.filter((_, ln) => keep[ln])
+  const boundaryVComs = allBounds.filter((_, ln) => keep[ln])
+  const cda = cdaRace(steady, opts.rho, opts.params, opts.track, boundaryVComs)
 
   const startMetrics = reconstructStart(timeline, detection, laps, opts.params, opts.rho, cda.cdaRace)
   const reproduction = reproduceTime(timeline, detection, laps, cda.cdaRace, opts)

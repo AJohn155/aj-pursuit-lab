@@ -440,6 +440,7 @@ export function scenarioToFullAnalysis(
     interpolatedFraction: 0,
     segmentCount: 1,
     segmentSpanS: t[t.length - 1] ?? 0,
+    recordIntervalS: 1,
   }
 
   // Lap 1's boundary is `-headStartS`, before the synthetic timeline's own t=0 — mirrors

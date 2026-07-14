@@ -26,6 +26,9 @@ export interface CompareItem {
   /** The ride's official per-lap splits, when it has them — the gap chart anchors its
    * elapsed times on these (owner request 2026-07). Absent for scenarios. */
   officialSplits?: number[]
+  /** Air density this selection's times happened at (ride: resolved ρ; scenario: sim ρ) —
+   * feeds the gap chart's density-normalization toggle (owner request 2026-07 round 5). */
+  rho?: number
 }
 
 /** Cumulative calibrated (datum) distance vs elapsed race time, 1 Hz, whole race. */

@@ -144,6 +144,14 @@ export interface Ride extends Persisted {
    * engine-derived and always takes priority for display.
    */
   manualAvgPowerW?: number
+  /**
+   * 'cadence' = the file's speed channel was broken (aliased SRM speed), and speed +
+   * distance are reconstructed from cadence × development (rollout × chainring/cog) on
+   * every analysis — chosen at upload (owner request 2026-07 round 5). Absent = trust the
+   * recorded speed, as always. Fixed gear, so the reconstruction is exact up to
+   * integer-rpm rounding; the ride's own gear/rollout fields drive it.
+   */
+  speedSource?: 'cadence'
   kit: string[]
   notes: string
   flags: { outdoor: boolean; caughtRider: boolean; interrupted: boolean }

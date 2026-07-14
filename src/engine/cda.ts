@@ -37,6 +37,17 @@ export interface CdaInput {
    * 2026-07).
    */
   edgeSmoothSamples?: number
+  /**
+   * Exact boundary COM speeds (m/s) for the ΔKE term, when the caller can interpolate them
+   * at the true window-edge times (lap-line crossings). The default sample-edge estimate is
+   * phase-locked to the lap line — the first/last 1 Hz samples sit up to ±1 s onto the
+   * within-lap speed oscillation's slope, the SAME side every lap, which systematically
+   * biased every per-lap CdA high by ~0.02 m² (owner report 2026-07 round 5 item 1: "no way
+   * those average to the ride CdA"). The concatenated steady window only pays that cost at
+   * its two outer edges, which is why the headline was fine.
+   */
+  vComStartOverrideMs?: number
+  vComEndOverrideMs?: number
 }
 
 export interface CdaBreakdown {
@@ -68,8 +79,8 @@ export function energyBalanceCda(input: CdaInput): CdaBreakdown {
 
   const n = Math.max(1, Math.min(edgeSmoothSamples, Math.floor(samples.length / 2)))
   const mean = (arr: Sample[]) => arr.reduce((s, x) => s + x.vCom, 0) / arr.length
-  const vComStart = mean(samples.slice(0, n))
-  const vComEnd = mean(samples.slice(samples.length - n))
+  const vComStart = input.vComStartOverrideMs ?? mean(samples.slice(0, n))
+  const vComEnd = input.vComEndOverrideMs ?? mean(samples.slice(samples.length - n))
 
   let eIn = startEnergyJ
   let eRoll = 0
@@ -100,14 +111,39 @@ export function energyBalanceCda(input: CdaInput): CdaBreakdown {
   }
 }
 
-/** Per-lap CdA (each single lap), SPEC §4.9 `cdaPerLap[]`. */
+/** Exact COM speeds at one lap window's true edge times (lap-line crossings). NaN = fall
+ * back to that edge's sample estimate. */
+export interface BoundaryVCom {
+  startMs: number
+  endMs: number
+}
+
+const finiteOrUndef = (v: number | undefined): number | undefined =>
+  v != null && Number.isFinite(v) ? v : undefined
+
+/**
+ * Per-lap CdA (each single lap), SPEC §4.9 `cdaPerLap[]`. `boundaryVComs` (same length as
+ * `laps`) supplies each lap's exact lap-line COM speeds for the ΔKE term — see
+ * CdaInput.vComStartOverrideMs for why the sample-edge default is biased here.
+ */
 export function cdaPerLap(
   laps: Sample[][],
   rho: number,
   params: RiderParams,
   track: TrackModel,
+  boundaryVComs?: BoundaryVCom[],
 ): number[] {
-  return laps.map((samples) => energyBalanceCda({ samples, rho, params, track }).cdaM2)
+  return laps.map(
+    (samples, i) =>
+      energyBalanceCda({
+        samples,
+        rho,
+        params,
+        track,
+        vComStartOverrideMs: finiteOrUndef(boundaryVComs?.[i]?.startMs),
+        vComEndOverrideMs: finiteOrUndef(boundaryVComs?.[i]?.endMs),
+      }).cdaM2,
+  )
 }
 
 /**
@@ -147,10 +183,18 @@ export function cdaRace(
   rho: number,
   params: RiderParams,
   track: TrackModel,
+  boundaryVComs?: BoundaryVCom[],
 ): CdaRaceResult {
   const samples = laps.flat()
-  const breakdown = energyBalanceCda({ samples, rho, params, track })
-  const perLap = cdaPerLap(laps, rho, params, track)
+  const breakdown = energyBalanceCda({
+    samples,
+    rho,
+    params,
+    track,
+    vComStartOverrideMs: finiteOrUndef(boundaryVComs?.[0]?.startMs),
+    vComEndOverrideMs: finiteOrUndef(boundaryVComs?.at(-1)?.endMs),
+  })
+  const perLap = cdaPerLap(laps, rho, params, track, boundaryVComs)
   return { cdaRace: breakdown.cdaM2, ci95: ci95FromScatter(perLap), perLap, breakdown }
 }
 

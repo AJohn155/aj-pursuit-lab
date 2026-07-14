@@ -25,6 +25,8 @@ const METRICS: { key: MetricKey; label: string; unit: string }[] = [
 interface Point {
   ride: Ride
   date: string
+  /** date + start-time sort key (rideDateTimeKey) — orders same-day rides. */
+  dateTime: string
   value: number | null
   outdoor: boolean
   kit: string[]
@@ -57,12 +59,54 @@ function metricValue(ride: Ride, key: MetricKey, referenceAirDensity: number, se
   }
 }
 
+/**
+ * Short per-point label for the chart (owner request 2026-07 round 5, item 4). Event name
+ * truncated so labels stay small; the full name remains on hover.
+ */
+function shortLabel(eventName: string): string {
+  const s = eventName.trim() || 'ride'
+  return s.length > 14 ? `${s.slice(0, 13)}…` : s
+}
+
+/**
+ * Greedy non-overlap label placement: points sorted by x get their label above by default;
+ * when a point sits close to the previous LABELED point in x, the label flips to the
+ * opposite side of the previous one (and to the right as a third option) so neighbouring
+ * labels don't stack on each other or on the marker run between them.
+ */
+function labelPositions(xs: number[], ys: number[]): string[] {
+  const positions: string[] = []
+  const n = xs.length
+  if (n === 0) return positions
+  const xMin = Math.min(...xs)
+  const xMax = Math.max(...xs)
+  const closeX = Math.max(1, (xMax - xMin) / 12)
+  let prevPos = 'bottom center'
+  for (let i = 0; i < n; i++) {
+    let pos = 'top center'
+    if (i > 0 && xs[i] - xs[i - 1] < closeX) {
+      pos = prevPos === 'top center' ? 'bottom center' : 'top center'
+      // Three-in-a-row pileup (e.g. same-day quali + final + another): push sideways.
+      if (i > 1 && xs[i] - xs[i - 2] < closeX && Math.abs(ys[i] - ys[i - 1]) < Math.abs(ys[i] - ys[i - 2])) {
+        pos = 'middle right'
+      }
+    }
+    positions.push(pos)
+    prevPos = pos
+  }
+  return positions
+}
+
 export default function Progression({ rides, venues, rawSettings }: { rides: Ride[]; venues: Venue[]; rawSettings: Settings }) {
   const [metric, setMetric] = useState<MetricKey>('normalizedTimeS')
   const [includeOutdoor, setIncludeOutdoor] = useState(false)
+  const [showLabels, setShowLabels] = useState(true)
+  // Rides deselected from the chart+trend (owner request 2026-07 round 5, item 4).
+  const [excludedIds, setExcludedIds] = useState<ReadonlySet<string>>(new Set())
+
   const settings = withSettingsDefaults(rawSettings)
 
-  const points = useMemo((): Point[] => {
+  const allPoints = useMemo((): Point[] => {
     return rides
       .map((ride) => {
         const venue = venues.find((v) => v.id === ride.venueId)
@@ -80,6 +124,7 @@ export default function Progression({ rides, venues, rawSettings }: { rides: Rid
       .sort((a, b) => a.dateTime.localeCompare(b.dateTime))
   }, [rides, venues, metric, settings])
 
+  const points = allPoints.filter((p) => !excludedIds.has(p.ride.id))
   const trendPoints = points.filter((p) => includeOutdoor || !p.outdoor)
   const trend =
     trendPoints.length >= 2
@@ -113,8 +158,37 @@ export default function Progression({ rides, venues, rawSettings }: { rides: Rid
             <input type="checkbox" checked={includeOutdoor} onChange={(e) => setIncludeOutdoor(e.target.checked)} />
             Include outdoor rides in trendline
           </label>
+          <label className="flex items-center gap-1.5 text-xs text-slate-600">
+            <input type="checkbox" checked={showLabels} onChange={(e) => setShowLabels(e.target.checked)} />
+            Labels
+          </label>
         </div>
       </div>
+      {allPoints.length > 0 && (
+        <details className="mb-2 text-xs text-slate-600" open={excludedIds.size > 0}>
+          <summary className="cursor-pointer select-none">
+            Rides in chart ({points.length}/{allPoints.length})
+            {excludedIds.size > 0 && ` — ${excludedIds.size} deselected`}
+          </summary>
+          <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+            {allPoints.map((p) => (
+              <label key={p.ride.id} className="flex items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={!excludedIds.has(p.ride.id)}
+                  onChange={(e) => {
+                    const next = new Set(excludedIds)
+                    if (e.target.checked) next.delete(p.ride.id)
+                    else next.add(p.ride.id)
+                    setExcludedIds(next)
+                  }}
+                />
+                {p.eventName} ({p.date})
+              </label>
+            ))}
+          </div>
+        </details>
+      )}
       {points.length === 0 ? (
         <p className="text-sm text-slate-500">No rides have this metric yet.</p>
       ) : (
@@ -123,11 +197,21 @@ export default function Progression({ rides, venues, rawSettings }: { rides: Rid
           data={[
             {
               type: 'scatter',
-              mode: 'markers',
+              mode: showLabels ? 'text+markers' : 'markers',
               x: points.map((p) => p.date),
               y: points.map((p) => p.value as number),
-              text: points.map((p) => `${p.eventName}${p.kit.length ? `<br>Kit: ${p.kit.join(', ')}` : ''}`),
-              hovertemplate: '%{x}<br>%{y}<br>%{text}<extra></extra>',
+              text: showLabels ? points.map((p) => shortLabel(p.eventName)) : undefined,
+              // Plotly accepts a per-point textposition array at runtime; the type only
+              // admits the scalar form, hence the cast.
+              textposition: showLabels
+                ? (labelPositions(
+                    points.map((p) => Date.parse(p.dateTime)),
+                    points.map((p) => p.value as number),
+                  ) as unknown as 'top center')
+                : undefined,
+              textfont: { size: 9, color: '#94a3b8' },
+              hovertext: points.map((p) => `${p.eventName}${p.kit.length ? `<br>Kit: ${p.kit.join(', ')}` : ''}`),
+              hovertemplate: '%{x}<br>%{y}<br>%{hovertext}<extra></extra>',
               marker: {
                 size: 9,
                 color: points.map((p) => (p.outdoor ? 'rgba(0,0,0,0)' : '#2563eb')),

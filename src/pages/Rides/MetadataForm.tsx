@@ -72,8 +72,10 @@ function MetadataFormInner({
   const [eventName, setEventName] = useState('')
   const [round, setRound] = useState<Ride['round']>('qualifying')
   const [venueId, setVenueId] = useState('')
-  const [chainring, setChainring] = useState(65)
-  const [cog, setCog] = useState(15)
+  // Prefill from the detection step's cadence-speed choice when the speed channel was
+  // broken (round 5): the reconstruction there used these values, so they must carry over.
+  const [chainring, setChainring] = useState(detection.speedFromCadence?.chainring ?? 65)
+  const [cog, setCog] = useState(detection.speedFromCadence?.cog ?? 15)
   const [densityMode, setDensityMode] = useState<'direct' | 'tprh' | 'unknown'>('direct')
   const [airDensity, setAirDensity] = useState('')
   const [tempC, setTempC] = useState('')
@@ -84,7 +86,7 @@ function MetadataFormInner({
   // globals, saved onto the ride so each ride carries (and can later edit) its own values.
   const [tyreCrr, setTyreCrr] = useState(String(settings.tyreCrr))
   const [mechEfficiency, setMechEfficiency] = useState(String(settings.mechEfficiency))
-  const [rolloutM, setRolloutM] = useState(String(settings.rolloutM))
+  const [rolloutM, setRolloutM] = useState(String(detection.speedFromCadence?.rolloutM ?? settings.rolloutM))
   const [kit, setKit] = useState<string[]>([])
   const [notes, setNotes] = useState('')
   const [caughtRider, setCaughtRider] = useState(false)
@@ -178,6 +180,11 @@ function MetadataFormInner({
         track,
         cpW,
         densityKnown,
+        // The form's CURRENT gear/rollout drive the reconstruction (the owner may have
+        // corrected them since the detection step), not the detection-step snapshot.
+        speedFromCadence: detection.speedFromCadence
+          ? { chainring, cog, rolloutM: rolloutVal }
+          : undefined,
       })
 
       const fitFileB64 = bytesToBase64(detection.fitBytes)
@@ -211,6 +218,7 @@ function MetadataFormInner({
         tyreCrr: tyreCrrVal,
         mechEfficiency: mechEfficiencyVal,
         rolloutM: rolloutVal,
+        speedSource: detection.speedFromCadence ? 'cadence' : undefined,
         kit,
         notes,
         flags: { outdoor: !venue.indoor, caughtRider, interrupted },

@@ -32,6 +32,8 @@ export interface Timeline {
   interpolatedFraction: number
   /** Number of >5 s-gap-separated segments the file split into. */
   segmentCount: number
+  /** Median raw record interval, s (1 for normal files; e.g. 5 for slow-recording SRM files). */
+  recordIntervalS: number
   /** Span (s) of the selected race segment. */
   segmentSpanS: number
 }

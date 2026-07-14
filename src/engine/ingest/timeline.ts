@@ -9,12 +9,16 @@ import { clamp, lerp } from './util'
 
 const GAP_SPLIT_S = 5
 
-/** Split records into contiguous segments wherever the elapsed-time gap exceeds 5 s. */
-export function splitSegments(records: FitRecord[]): FitRecord[][] {
+/**
+ * Split records into contiguous segments wherever the elapsed-time gap exceeds the
+ * threshold (default 5 s). Files recorded at intervals ≥ the default threshold (e.g. a 5 s
+ * SRM interval) pass a larger threshold, else every routine inter-record gap would split.
+ */
+export function splitSegments(records: FitRecord[], gapSplitS: number = GAP_SPLIT_S): FitRecord[][] {
   const segments: FitRecord[][] = []
   let current: FitRecord[] = [records[0]]
   for (let i = 1; i < records.length; i++) {
-    if (records[i].t - records[i - 1].t > GAP_SPLIT_S) {
+    if (records[i].t - records[i - 1].t > gapSplitS) {
       segments.push(current)
       current = []
     }
@@ -24,6 +28,16 @@ export function splitSegments(records: FitRecord[]): FitRecord[][] {
   return segments
 }
 
+/** Median inter-record interval, s (the file's own recording cadence). */
+function medianIntervalS(records: FitRecord[]): number {
+  if (records.length < 2) return 1
+  const intervals = records
+    .slice(1)
+    .map((r, i) => r.t - records[i].t)
+    .sort((a, b) => a - b)
+  return intervals[Math.floor(intervals.length / 2)]
+}
+
 /**
  * Build a uniform 1 Hz timeline over the race segment (SPEC §4.4). The race segment is the
  * one with the most records — for both fixtures the race is by far the densest span, with
@@ -31,7 +45,10 @@ export function splitSegments(records: FitRecord[]): FitRecord[][] {
  */
 export function buildTimeline(records: FitRecord[]): Timeline {
   if (records.length === 0) throw new Error('buildTimeline: no records')
-  const segments = splitSegments(records)
+  // Slow-recording files (e.g. 5 s SRM interval) split segments at 2.5× their own
+  // interval instead of the 1 Hz default, else every routine gap would be a split.
+  const rawInterval = medianIntervalS(records)
+  const segments = splitSegments(records, Math.max(GAP_SPLIT_S, 2.5 * rawInterval))
   const seg = segments.reduce((a, b) => (b.length > a.length ? b : a))
 
   const t0 = seg[0].t
@@ -40,6 +57,12 @@ export function buildTimeline(records: FitRecord[]): Timeline {
 
   // Raw sample times (rounded to the second) mark which integer seconds are real vs filled.
   const rawSeconds = new Set(seg.map((r) => Math.round(r.t)))
+
+  // The race segment's own recording cadence: a second between two 5 s-interval records is
+  // expected coverage, not a dropout — only gaps exceeding the segment's own interval
+  // count (owner file 2026-07 round 5). 1 Hz files behave exactly as before (interval 1 →
+  // any skipped second is a dropout).
+  const recordIntervalS = medianIntervalS(seg)
 
   const t: number[] = []
   const v: number[] = []
@@ -61,7 +84,7 @@ export function buildTimeline(records: FitRecord[]): Timeline {
     p.push(lerp(a.powerW, b.powerW, f))
     d.push(lerp(a.distanceM, b.distanceM, f))
     cad.push(lerp(a.cadenceRpm ?? 0, b.cadenceRpm ?? 0, f))
-    interpolated.push(!rawSeconds.has(now))
+    interpolated.push(!rawSeconds.has(now) && b.t - a.t > recordIntervalS + 0.5)
   }
 
   const dropoutSeconds = interpolated.reduce((s, b) => s + (b ? 1 : 0), 0)
@@ -76,5 +99,6 @@ export function buildTimeline(records: FitRecord[]): Timeline {
     interpolatedFraction: dropoutSeconds / n,
     segmentCount: segments.length,
     segmentSpanS: t1 - t0,
+    recordIntervalS,
   }
 }

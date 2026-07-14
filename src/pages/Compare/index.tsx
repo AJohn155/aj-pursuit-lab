@@ -5,6 +5,7 @@
 import { useMemo, useState } from 'react'
 import { dataStore } from '../../store/DataStore'
 import { analyzeStoredRide } from '../../store/analyzeStoredRide'
+import { resolveRideDensity } from '../../store/density'
 import { resolveScenario, resolveScenarioBaseline, runScenario, scenarioToFullAnalysis } from '../../store/scenario'
 import { SETTINGS_ID, withSettingsDefaults } from '../../store/types'
 import { useCollection } from '../../store/useCollection'
@@ -58,6 +59,7 @@ export default function Compare() {
             full,
             lapLengthM: venue.lapLengthM,
             officialSplits: ride.officialSplits,
+            rho: resolveRideDensity(ride, settings).rho,
           })
         } catch (e) {
           errors.push(`${ride.eventName || 'Ride'}: ${e instanceof Error ? e.message : String(e)}`)
@@ -85,6 +87,7 @@ export default function Compare() {
             color: colorFor(i),
             full,
             lapLengthM: resolved.track.lapLengthM,
+            rho: resolved.rho,
           })
         } catch (e) {
           errors.push(`${scenario.name}: ${e instanceof Error ? e.message : String(e)}`)
@@ -120,7 +123,7 @@ export default function Compare() {
             <p className="text-sm text-slate-500">Select at least 2 analyzable rides or pinned scenarios to see comparison charts.</p>
           ) : (
             <>
-              <GapChart items={items} />
+              <GapChart items={items} referenceAirDensity={settings.referenceAirDensity} />
               <LapSplitChart items={items} />
               <CdaOverlayChart items={items} />
               <WBalOverlayChart items={items} />

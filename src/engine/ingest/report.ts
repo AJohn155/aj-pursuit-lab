@@ -21,7 +21,7 @@ import { analyzeRide } from './analyze'
 import type { AnalyzeOptions, RideAnalysis } from './analyze'
 import { fitVenueGeometry, peakSpeedPhaseDeg, steadyLapSpeedProfiles } from './geometry'
 import type { GeometryFit } from './geometry'
-import { lapSampleGroups, raceSampleSeries } from './laps'
+import { lapBoundaryVComs, lapSampleGroups, raceSampleSeries } from './laps'
 import { lapSpeedVsPositionSeries } from './overlay'
 import type { LapPositionSeries } from './overlay'
 import { assessQuality } from './quality'
@@ -140,7 +140,10 @@ export function analyzeRideFull(content: ArrayBuffer | Uint8Array, opts: Analyze
 
   // Per-lap breakdown over ALL constructed laps (not just the steady window) — the lap
   // table shows every lap, including the standing-start laps where CdA is unreliable.
+  // ΔKE boundary speeds are interpolated at the true lap-line times (see lapBoundaryVComs)
+  // — the sample-edge default is phase-locked to the lap line and biased every lap high.
   const groups = lapSampleGroups(timeline, laps, track)
+  const bounds = lapBoundaryVComs(timeline, laps)
   const lapResults: LapResult[] = []
   for (let ln = 0; ln < laps.lapBoundaryTimes.length - 1; ln++) {
     const a = laps.lapBoundaryTimes[ln]
@@ -149,7 +152,14 @@ export function analyzeRideFull(content: ArrayBuffer | Uint8Array, opts: Analyze
     const group = groups[ln]
     const cda =
       group.length >= 2
-        ? energyBalanceCda({ samples: group, rho: opts.rho, params: opts.params, track }).cdaM2
+        ? energyBalanceCda({
+            samples: group,
+            rho: opts.rho,
+            params: opts.params,
+            track,
+            vComStartOverrideMs: Number.isFinite(bounds[ln]?.startMs) ? bounds[ln].startMs : undefined,
+            vComEndOverrideMs: Number.isFinite(bounds[ln]?.endMs) ? bounds[ln].endMs : undefined,
+          }).cdaM2
         : Number.NaN
     lapResults.push({
       timeS: b - a,
@@ -265,6 +275,7 @@ export function analyzeRideFull(content: ArrayBuffer | Uint8Array, opts: Analyze
     expectedLapCount,
     cdaM2: base.cdaRaceM2,
     densityKnown: opts.densityKnown,
+    speedFromCadence: opts.speedFromCadence != null,
   })
 
   const analysisResult: AnalysisResult = {

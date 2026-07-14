@@ -41,5 +41,11 @@ export function analyzeStoredRide(ride: Ride, venue: Venue, rawSettings: Setting
     track,
     cpW,
     densityKnown,
+    // Rides whose speed channel was broken at upload re-derive speed/distance from
+    // cadence × this ride's gear + rollout on every analysis (owner request 2026-07 r5).
+    speedFromCadence:
+      ride.speedSource === 'cadence'
+        ? { ...ride.gear, rolloutM: ride.rolloutM ?? settings.rolloutM }
+        : undefined,
   })
 }

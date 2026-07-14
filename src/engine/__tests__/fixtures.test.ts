@@ -127,6 +127,17 @@ describe('Gate 4 — CdA (SPEC §7.4)', () => {
   it('the two rides agree within 0.015 m²', () => {
     expect(Math.abs(quali.cdaRaceM2 - final.cdaRaceM2)).toBeLessThan(gates.cdaAgreementMaxDiffM2)
   })
+
+  it('per-lap CdAs scatter around cdaRace, not systematically above it (2026-07 round 5 item 1)', () => {
+    // Regression: sample-edge ΔKE boundaries were phase-locked to the lap line and biased
+    // EVERY per-lap CdA high (quali mean was 0.1855 vs cdaRace 0.1672). With boundary
+    // speeds interpolated at the true lap-line times, the aero-weighted per-lap mean must
+    // sit on the whole-window balance.
+    for (const a of [quali, final]) {
+      const mean = a.cdaPerLapM2.reduce((s, x) => s + x, 0) / a.cdaPerLapM2.length
+      expect(Math.abs(mean - a.cdaRaceM2)).toBeLessThan(0.004)
+    }
+  })
 })
 
 describe('Gate 5 — forward-sim reproduction (SPEC §7.5)', () => {
