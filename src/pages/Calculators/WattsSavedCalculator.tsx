@@ -7,6 +7,7 @@
 import { useState } from 'react'
 import { KPH_TO_MS, timeSavedForCdaReduction, wattsSavedAero } from '../../engine/calculators'
 import type { Settings } from '../../store/types'
+import { T } from '../../components/EditableText'
 import { heatColor, heatT } from './heat'
 import { formatMinSec } from './schedule'
 
@@ -162,11 +163,21 @@ export default function WattsSavedCalculator({ settings }: { settings: Settings 
         </div>
       )}
       <p className="text-xs text-slate-500">
-        Columns = CdA change in counts (1 count = 0.001 m²), green = bigger saving.{' '}
-        {mode === 'watts'
-          ? 'Watts saved = ½·ΔCdA·ρ·v³ (distance-independent).'
-          : 'Time saved holds power constant at the baseline CdA and re-solves the speed at the reduced CdA over the remaining distance (start lap unchanged).'}{' '}
-        Race time = start lap + remaining distance at that speed.
+        <T
+          as="span"
+          id="calculators.wattssaved.caption-base"
+          d="Columns = CdA change in counts (1 count = 0.001 m²), green = bigger saving."
+        />{' '}
+        {mode === 'watts' ? (
+          <T as="span" id="calculators.wattssaved.caption-watts" d="Watts saved = ½·ΔCdA·ρ·v³ (distance-independent)." />
+        ) : (
+          <T
+            as="span"
+            id="calculators.wattssaved.caption-time"
+            d="Time saved holds power constant at the baseline CdA and re-solves the speed at the reduced CdA over the remaining distance (start lap unchanged)."
+          />
+        )}{' '}
+        <T as="span" id="calculators.wattssaved.caption-racetime" d="Race time = start lap + remaining distance at that speed." />
       </p>
     </div>
   )

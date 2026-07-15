@@ -59,13 +59,16 @@ export default function OverlayChart({
         }}
         height={320}
       />
-      <p className="mt-1 text-xs text-slate-400">
-        Light → dark = lap 1 → lap {lapCount}. Shaded bands are the bends (fitted geometry); wheel speed
-        should peak in the bends because the lean lengthens the wheel path. Positions are aligned to the
-        track via this ride&apos;s fitted lap-line phase
-        {geometry ? ` (${geometry.phaseOffsetM.toFixed(0)} m)` : ' (no fit available)'} — each ride&apos;s own
-        start-datum anchor carries a ±10–30 m uncertainty until §4.7.3 oscillation anchoring lands.
-      </p>
+      <T
+        as="p"
+        className="mt-1 text-xs text-slate-400"
+        id="rides.ridedetail.overlaychart.caption"
+        d="Light → dark = lap 1 → lap {lapCount}. Shaded bands are the bends (fitted geometry); wheel speed should peak in the bends because the lean lengthens the wheel path. Positions are aligned to the track via this ride's fitted lap-line phase ({phase}) — each ride's own start-datum anchor carries a ±10–30 m uncertainty until §4.7.3 oscillation anchoring lands."
+        vars={{
+          lapCount,
+          phase: geometry ? `${geometry.phaseOffsetM.toFixed(0)} m` : 'no fit available',
+        }}
+      />
     </section>
   )
 }

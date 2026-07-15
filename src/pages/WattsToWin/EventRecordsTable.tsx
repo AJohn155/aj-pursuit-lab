@@ -132,12 +132,15 @@ function RideRecords({ model, event }: { model: RideModel; event: Event }) {
           </tbody>
         </table>
       </div>
-      <p className="mt-1 text-xs text-slate-400">
-        +X W is model-to-model: the settle power to beat the winner minus the settle power at which
-        the same model reproduces this ride's own official time ({model.modelSettleW.toFixed(0)} W
-        {model.actualExclLap1W != null ? `; recorded power excl. lap 1 was ${model.actualExclLap1W.toFixed(0)} W` : ''}
-        ) — so an identical time reads ~0 W.
-      </p>
+      <T
+        as="p"
+        className="mt-1 text-xs text-slate-400"
+        id="wattstowin.eventrecordstable.model-to-model-note"
+        d="+X W is model-to-model: the settle power to beat the winner minus the settle power at which the same model reproduces this ride's own official time ({settle}) — so an identical time reads ~0 W."
+        vars={{
+          settle: `${model.modelSettleW.toFixed(0)} W${model.actualExclLap1W != null ? `; recorded power excl. lap 1 was ${model.actualExclLap1W.toFixed(0)} W` : ''}`,
+        }}
+      />
 
       <div className="mt-3">
         <T as="h4" className="mb-1 text-xs font-semibold uppercase text-slate-500" id="wattstowin.eventrecordstable.time-at-n-w-pacing" d="Time at +N W (pacing shape preserved)" />

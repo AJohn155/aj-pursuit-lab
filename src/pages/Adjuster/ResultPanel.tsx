@@ -78,12 +78,16 @@ export default function ResultPanel({
         <Stat label="CdA used" value={resolved.cdaM2.toFixed(4)} />
       </div>
       {reproBiasS != null && (
-        <p className="text-xs text-slate-400">
-          The model re-simulates the baseline ride itself at {baselineRun.predictedTimeS.toFixed(3)}s (
-          {reproBiasS <= 0 ? '−' : '+'}
-          {Math.abs(reproBiasS).toFixed(2)}s vs official) — treat predicted deltas smaller than that
-          reproduction bias as noise.
-        </p>
+        <T
+          as="p"
+          className="text-xs text-slate-400"
+          id="adjuster.resultpanel.repro-bias-note"
+          d="The model re-simulates the baseline ride itself at {reproTime}s ({bias}s vs official) — treat predicted deltas smaller than that reproduction bias as noise."
+          vars={{
+            reproTime: baselineRun.predictedTimeS.toFixed(3),
+            bias: `${reproBiasS <= 0 ? '−' : '+'}${Math.abs(reproBiasS).toFixed(2)}`,
+          }}
+        />
       )}
 
       <div>
@@ -110,10 +114,13 @@ export default function ResultPanel({
           height={260}
         />
         {simStartM > 100 && (
-          <p className="mt-1 text-xs text-slate-400">
-            Starts at {simStartM.toFixed(0)} m — the start split is an input, not modeled, so there's
-            nothing to compare inside lap 1.
-          </p>
+          <T
+            as="p"
+            className="mt-1 text-xs text-slate-400"
+            id="adjuster.resultpanel.sim-start-note"
+            d="Starts at {startM} m — the start split is an input, not modeled, so there's nothing to compare inside lap 1."
+            vars={{ startM: simStartM.toFixed(0) }}
+          />
         )}
       </div>
 

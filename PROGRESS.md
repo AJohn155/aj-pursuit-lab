@@ -538,3 +538,14 @@ Owner picked from the round-7 audit + closed the caught-rider discussion with da
 - Splits nudge confirmed already live from round 6 (amber chip); PWA/offline explicitly declined by owner.
 
 **Test status:** `npm test` **245/245** (rewritten caught-rider tests: default range, owner-edited override, full-headline-unchanged + companion-inside-kept-range on the real quali; new gapCharts refIndex test); `tsc -b`, `npm run lint`, `npm run build` clean. Live-verified end-to-end with all three real rides; zero console errors; staged files removed, dev data cleared.
+
+## 2026-07-14 — Owner feedback round 9: template-editable captions everywhere, storage panel
+
+**Model:** Claude (Fable 5), via Claude Code CLI
+
+Two owner items: edit-text mode skipped the captions under tables/charts (they embed live numbers, so round 4's plain-string `<T>` couldn't hold them), and "what does my storage situation look like / could I attach ride videos?" (videos answered in chat with options, awaiting his pick — no code).
+
+- **Template-editable captions:** `<T>` gains a `vars` prop — the stored override is a TEMPLATE with `{name}` placeholders, interpolated with live values at render (unknown placeholders render literally so typos are visible; edit-mode tooltip lists the available placeholders). Converted the remaining non-editable prose: lap-table caption (total extra distance + clamp note + exclusion note, three independently editable segments), speed-vs-position overlay caption ({lapCount}, {phase}), W2W model-to-model footnote ({settle}), Adjuster repro-bias + sim-start notes, gap-chart caption (five conditional segments), watts-saved caption (three segments incl. the mode-dependent middle), cadence-calculator caption, Race Day save-as-scenario note. Form-field hints and stat labels deliberately left as-is (structural labels, not prose) — noted to owner. Live-verified: 16 editable strings on ride detail; edited the lap-table template ("Extra meters ridden above the datum … {total} m.") and confirmed it renders with the live 13.3 m.
+- **Storage panel (Settings):** ride count + total doc bytes + .fit attachment bytes, largest ride doc vs the Firestore 1 MB limit / 683.6 KB base64 upload guard, other doc counts, and `navigator.storage.estimate()` usage vs quota. Real numbers from the test browser: one ride ≈ 13.7 KB doc (6.9 KB .fit), total usage 59 KB of a 3.14 GB browser quota — SRM race files are so small that storage is a non-issue at any realistic ride count.
+
+**Test status:** `npm test` 245/245; `tsc -b`, `npm run lint`, `npm run build` clean. Live-verified caption editing round-trip and the storage panel; zero console errors; test data + staged files cleaned.

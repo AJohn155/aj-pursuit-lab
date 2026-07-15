@@ -16,20 +16,34 @@ export function TextEditProvider({ children }: { children: ReactNode }) {
 }
 
 /**
+ * Interpolate `{name}` placeholders from `vars` — how captions with live numbers stay
+ * editable (owner request 2026-07 round 9): the OVERRIDE stores the template, the numbers
+ * are substituted at render. Unknown placeholders render literally so a typo is visible
+ * rather than silently swallowed.
+ */
+function interpolate(template: string, vars?: Record<string, string | number>): string {
+  if (!vars) return template
+  return template.replace(/\{(\w+)\}/g, (m, key: string) => (key in vars ? String(vars[key]) : m))
+}
+
+/**
  * Editable text node. Renders the override for `id` (or the default `d`) inside `as`.
  * In edit mode it becomes an input styled to inherit the heading's own typography;
- * blur saves, empty restores the default.
+ * blur saves, empty restores the default. `vars` values fill `{name}` placeholders in the
+ * template — edit mode edits the template itself, placeholders visible.
  */
 export function T({
   id,
   d,
   as: Tag = 'span',
   className,
+  vars,
 }: {
   id: string
   d: string
   as?: 'h1' | 'h2' | 'h3' | 'h4' | 'p' | 'span' | 'legend'
   className?: string
+  vars?: Record<string, string | number>
 }) {
   const { editing } = useTextEdit()
   const settingsRows = useCollection(dataStore.settings)
@@ -37,7 +51,7 @@ export function T({
   const settings = rawSettings ? withSettingsDefaults(rawSettings) : undefined
   const text = settings?.textOverrides[id] ?? d
 
-  if (!editing || !settings) return <Tag className={className}>{text}</Tag>
+  if (!editing || !settings) return <Tag className={className}>{interpolate(text, vars)}</Tag>
 
   async function save(value: string) {
     if (!settings) return
@@ -58,7 +72,7 @@ export function T({
         onKeyDown={(e) => {
           if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
         }}
-        title={`Default: ${d}`}
+        title={`Default: ${d}${vars ? ` — placeholders: ${Object.keys(vars).map((k) => `{${k}}`).join(' ')}` : ''}`}
         className="w-full min-w-24 rounded border border-dashed border-violet-400 bg-violet-50/50 px-1"
         style={{ font: 'inherit', color: 'inherit', letterSpacing: 'inherit' }}
       />

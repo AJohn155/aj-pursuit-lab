@@ -60,17 +60,29 @@ export default function LapTable({
         </table>
       </div>
       <p className="text-xs text-slate-600">
-        Total extra distance vs. the datum line (laps 3–15):{' '}
-        <span className="font-semibold">{totalExtraM.toFixed(1)} m</span>
+        <T
+          as="span"
+          id="rides.ridedetail.laptable.total-extra-distance"
+          d="Total extra distance vs. the datum line (laps 3–15): {total} m."
+          vars={{ total: totalExtraM.toFixed(1) }}
+        />
         {rawExtraM < 0 && (
-          <span className="text-slate-400">
+          <>
             {' '}
-            (measured {rawExtraM.toFixed(1)} m — clamped to 0; a negative reading is a calibration/rollout
-            residual, not riding under the black line)
-          </span>
-        )}
-        . Laps 1–2 and the last lap are excluded — their boundaries carry too much start/finish
-        uncertainty to interpret as line height.
+            <T
+              as="span"
+              className="text-slate-400"
+              id="rides.ridedetail.laptable.clamped-note"
+              d="(measured {raw} m — clamped to 0; a negative reading is a calibration/rollout residual, not riding under the black line)"
+              vars={{ raw: rawExtraM.toFixed(1) }}
+            />
+          </>
+        )}{' '}
+        <T
+          as="span"
+          id="rides.ridedetail.laptable.laps-excluded-note"
+          d="Laps 1–2 and the last lap are excluded — their boundaries carry too much start/finish uncertainty to interpret as line height."
+        />
       </p>
       {officialAnchored ? (
         <T as="p" className="text-xs text-slate-400" id="rides.ridedetail.laptable.per-lap-values-are-anchored" d="Per-lap values are anchored on your official splits. Individual laps still carry ~±0.5 m of boundary noise (adjacent laps anti-correlate) — the average and total above are the robust numbers, since boundary errors cancel in the sum." />

@@ -71,14 +71,54 @@ export default function GapChart({
         </div>
       </div>
       <p className="mb-2 text-xs text-slate-500">
-        Time behind/ahead of the reference ({refItem.label}) at each point on the track. Negative = ahead.
-        {normalizeDensity &&
-          ` Times are density-normalized (same convention as Progression's "Normalized time") — gaps show fitness+aero, not air.`}
-        {missingRho > 0 && ` ${missingRho} selection(s) have no density and stay unnormalized.`}
-        {anchored > 0 &&
-          ` ${anchored}/${items.length} selections are anchored on official lap splits (lap-line gaps are exactly the official gaps).`}
-        {anchored < items.length &&
-          ' Rides without official splits use the reconstructed timeline (±1 s start-anchor uncertainty, mostly in lap 1) — add splits via "Edit details" on the ride.'}
+        <T
+          as="span"
+          id="compare.gapchart.caption-base"
+          d="Time behind/ahead of the reference ({ref}) at each point on the track. Negative = ahead."
+          vars={{ ref: refItem.label }}
+        />
+        {normalizeDensity && (
+          <>
+            {' '}
+            <T
+              as="span"
+              id="compare.gapchart.caption-normalized"
+              d="Times are density-normalized (same convention as Progression's “Normalized time”) — gaps show fitness+aero, not air."
+            />
+          </>
+        )}
+        {missingRho > 0 && (
+          <>
+            {' '}
+            <T
+              as="span"
+              id="compare.gapchart.caption-missing-rho"
+              d="{n} selection(s) have no density and stay unnormalized."
+              vars={{ n: missingRho }}
+            />
+          </>
+        )}
+        {anchored > 0 && (
+          <>
+            {' '}
+            <T
+              as="span"
+              id="compare.gapchart.caption-anchored"
+              d="{anchored}/{total} selections are anchored on official lap splits (lap-line gaps are exactly the official gaps)."
+              vars={{ anchored, total: items.length }}
+            />
+          </>
+        )}
+        {anchored < items.length && (
+          <>
+            {' '}
+            <T
+              as="span"
+              id="compare.gapchart.caption-unanchored"
+              d="Rides without official splits use the reconstructed timeline (±1 s start-anchor uncertainty, mostly in lap 1) — add splits via “Edit details” on the ride."
+            />
+          </>
+        )}
       </p>
       <Chart
         ariaLabel="Cumulative time delta versus distance, relative to the reference ride"

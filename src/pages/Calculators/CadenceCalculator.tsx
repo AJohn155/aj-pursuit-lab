@@ -167,10 +167,12 @@ export default function CadenceCalculator({ settings, venues }: { settings: Sett
       ) : (
         <p className="text-sm text-slate-500">Enter a valid speed range (min ≤ max, step &gt; 0) to see the grid.</p>
       )}
-      <p className="text-xs text-slate-500">
-        Speed sets each row; lap time = lap length ÷ speed on the selected venue, and cadence follows
-        from the lap time and gear.
-      </p>
+      <T
+        as="p"
+        className="text-xs text-slate-500"
+        id="calculators.cadence.caption"
+        d="Speed sets each row; lap time = lap length ÷ speed on the selected venue, and cadence follows from the lap time and gear."
+      />
     </div>
   )
 }

@@ -348,10 +348,12 @@ export default function RaceDay() {
             </button>
             {saveMessage && <span className="text-xs text-green-700">{saveMessage}</span>}
           </div>
-          <p className="text-xs text-slate-500">
-            "Save as scenario" stores the flat-power equivalent of this start-ramp schedule (Scenario overrides have
-            no template-shape field) — its own predicted time in Adjuster may differ slightly from the plan above.
-          </p>
+          <T
+            as="p"
+            className="text-xs text-slate-500"
+            id="raceday.save-as-scenario-note"
+            d="“Save as scenario” stores the flat-power equivalent of this start-ramp schedule (Scenario overrides have no template-shape field) — its own predicted time in Adjuster may differ slightly from the plan above."
+          />
         </section>
       )}
     </div>

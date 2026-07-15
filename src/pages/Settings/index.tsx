@@ -1,6 +1,7 @@
 import AuthPanel from './AuthPanel'
 import BackupPanel from './BackupPanel'
 import GlobalParams from './GlobalParams'
+import StoragePanel from './StoragePanel'
 import VenueManager from './VenueManager'
 import { T } from '../../components/EditableText'
 
@@ -11,6 +12,7 @@ export default function Settings() {
       <AuthPanel />
       <GlobalParams />
       <BackupPanel />
+      <StoragePanel />
       <VenueManager />
     </div>
   )
