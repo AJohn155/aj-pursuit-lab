@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { airDensity, densityScaleLap1, densityScaleSteady } from '../atmosphere'
+import { airDensity, densityFromAltitude, densityScaleLap1, densityScaleSteady, isaPressureHPa } from '../atmosphere'
 
 describe('airDensity (SPEC §4.2)', () => {
   // Gate 6 (SPEC §7): T=24, P=1006, RH=55 → 1.1722 ± 0.0005.
@@ -38,5 +38,23 @@ describe('density normalization scales (SPEC §4.12)', () => {
     const lap1 = densityScaleLap1(0.9934, 1.1722)
     expect(lap1).toBeGreaterThan(steady) // both < 1; lap1 nearer 1
     expect(lap1).toBeLessThan(1)
+  })
+})
+
+describe('altitude-based density estimate (owner request 2026-07 round 10)', () => {
+  it('ISA pressure: sea level 1013.25 hPa; 1880 m ≈ 807 hPa', () => {
+    expect(isaPressureHPa(0)).toBeCloseTo(1013.25, 2)
+    expect(isaPressureHPa(1880)).toBeGreaterThan(800)
+    expect(isaPressureHPa(1880)).toBeLessThan(815)
+  })
+
+  it('density falls with altitude and always stays flagged as an estimate by callers', () => {
+    const sea = densityFromAltitude(0)
+    const cos = densityFromAltitude(1880)
+    expect(sea).toBeGreaterThan(1.15)
+    expect(sea).toBeLessThan(1.25)
+    expect(cos).toBeGreaterThan(0.9)
+    expect(cos).toBeLessThan(1.0)
+    expect(cos).toBeLessThan(sea)
   })
 })

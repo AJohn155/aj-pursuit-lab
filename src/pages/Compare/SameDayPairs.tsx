@@ -66,7 +66,7 @@ export default function SameDayPairs({
   if (days.length === 0) return null
 
   const stats = (ride: Ride): RoundStats => {
-    const { rho } = resolveRideDensity(ride, settings)
+    const { rho } = resolveRideDensity(ride, settings, venues.find((v) => v.id === ride.venueId))
     const a = ride.analysis
     return {
       ride,

@@ -170,6 +170,9 @@ export interface Ride extends Persisted {
    */
   caughtExcludeFromLap?: number
   caughtExcludeToLap?: number
+  /** True once the owner dismissed the automatic "did you catch a rider?" suggestion for
+   * this ride (round 10) — the banner never re-appears. */
+  catchSuggestionDismissed?: boolean
   result?: string
   fitFileB64?: string
   analysis?: AnalysisResult
@@ -217,6 +220,8 @@ export interface Event extends Persisted {
   name: string
   date: string
   venueId: string
-  winners: { round: string; name: string; timeS: number }[]
+  /** `splits` (owner request 2026-07 round 10): the winner's per-lap times when published
+   * — 16 entries unlock the gap-vs-distance chart against them. */
+  winners: { round: string; name: string; timeS: number; splits?: number[] }[]
   myRideIds: string[]
 }

@@ -4,8 +4,47 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { BADGE_CLASSES, qualityBadgeForScore } from '../Rides/format'
+import { parseSplitsText } from '../Rides/splits'
 import type { Event, Ride, Venue } from '../../store/types'
 import { T } from '../../components/EditableText'
+
+/**
+ * Optional per-winner lap splits (owner request 2026-07 round 10): 16 entries unlock the
+ * gap-vs-distance chart against this winner. Accepts the same per-lap/cumulative paste
+ * formats as ride splits.
+ */
+function WinnerSplitsInput({
+  winner,
+  onChange,
+}: {
+  winner: Event['winners'][number]
+  onChange: (splits: number[] | undefined) => void
+}) {
+  const [text, setText] = useState(winner.splits?.map((s) => s.toFixed(3)).join(' ') ?? '')
+  const parsed = parseSplitsText(text)
+  return (
+    <label className="block">
+      <textarea
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value)
+          const p = parseSplitsText(e.target.value)
+          onChange(!p.error && p.splits.length > 0 ? p.splits : undefined)
+        }}
+        rows={1}
+        placeholder="winner's lap splits (optional) — 16 laps unlock the gap-by-distance chart"
+        className="block w-full rounded-md border border-slate-200 px-2 py-1 text-xs"
+      />
+      {text.trim() !== '' && !parsed.error && (
+        <span className="mt-0.5 block text-xs text-slate-500">
+          Parsed {parsed.splits.length} lap(s), total {parsed.splits.reduce((s, x) => s + x, 0).toFixed(3)} s
+          {parsed.splits.length !== 16 && ' — 16 needed for the gap chart'}
+        </span>
+      )}
+      {parsed.error && <span className="mt-0.5 block text-xs text-red-600">{parsed.error}</span>}
+    </label>
+  )
+}
 
 function newEventId(): string {
   return `event-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -61,7 +100,14 @@ export default function EventForm({
       name,
       date,
       venueId,
-      winners: winners.filter((w) => w.name.trim() !== ''),
+      // Strip undefined `splits` keys — Firestore rejects undefined field values.
+      winners: winners
+        .filter((w) => w.name.trim() !== '')
+        .map((w) =>
+          w.splits && w.splits.length > 0
+            ? { round: w.round, name: w.name, timeS: w.timeS, splits: w.splits }
+            : { round: w.round, name: w.name, timeS: w.timeS },
+        ),
       myRideIds,
     })
   }
@@ -94,34 +140,37 @@ export default function EventForm({
       <fieldset className="space-y-2">
         <legend className={labelTextClass}>Winners</legend>
         {winners.map((w, i) => (
-          <div key={i} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_2fr_1fr_auto]">
-            <input
-              value={w.round}
-              onChange={(e) => updateWinner(i, { round: e.target.value })}
-              placeholder="round (final)"
-              className={inputClass}
-            />
-            <input
-              value={w.name}
-              onChange={(e) => updateWinner(i, { name: e.target.value })}
-              placeholder="winner name"
-              className={inputClass}
-            />
-            <input
-              type="number"
-              step="0.001"
-              value={w.timeS}
-              onChange={(e) => updateWinner(i, { timeS: Number(e.target.value) })}
-              placeholder="time (s)"
-              className={inputClass}
-            />
-            <button
-              type="button"
-              onClick={() => removeWinner(i)}
-              className="rounded-lg border border-red-200 px-2 text-xs font-medium text-red-700 hover:bg-red-50"
-            >
-              Remove
-            </button>
+          <div key={i} className="space-y-1 rounded-lg border border-slate-100 p-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_2fr_1fr_auto]">
+              <input
+                value={w.round}
+                onChange={(e) => updateWinner(i, { round: e.target.value })}
+                placeholder="round (final)"
+                className={inputClass}
+              />
+              <input
+                value={w.name}
+                onChange={(e) => updateWinner(i, { name: e.target.value })}
+                placeholder="winner name"
+                className={inputClass}
+              />
+              <input
+                type="number"
+                step="0.001"
+                value={w.timeS}
+                onChange={(e) => updateWinner(i, { timeS: Number(e.target.value) })}
+                placeholder="time (s)"
+                className={inputClass}
+              />
+              <button
+                type="button"
+                onClick={() => removeWinner(i)}
+                className="rounded-lg border border-red-200 px-2 text-xs font-medium text-red-700 hover:bg-red-50"
+              >
+                Remove
+              </button>
+            </div>
+            <WinnerSplitsInput winner={w} onChange={(splits) => updateWinner(i, { splits })} />
           </div>
         ))}
         <button

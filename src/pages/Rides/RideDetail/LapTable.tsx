@@ -1,28 +1,35 @@
-// Lap table (SPEC §5.1): split, official split, CdA, line height, W — plus the total
-// extra distance the line heights imply (owner request 2026-07: "show extra meters
-// traveled total"). Line height covers the interior laps 3–15 only, and the displayed
-// total clamps at 0 (riding under the black line is impossible; a negative measurement is
-// a calibration/rollout residual and is said out loud rather than shown as real).
+// Lap table (SPEC §5.1): split, official split, Δ vs official, CdA, W — plus the TOTAL
+// extra distance vs the 3,250 m interior datum (laps 3–15). Per-lap line height was
+// removed on owner request (2026-07 round 10 — the per-lap values never behaved as
+// expected; boundary noise dominates them, and on cadence-reconstructed rides they only
+// measured the gear guess). The total telescopes over the interior boundaries, so it's
+// the robust number and the only one shown; it clamps at 0 (riding under the black line
+// is impossible; a negative measurement is a calibration/rollout residual, said out loud).
 
 import type { LapConstruction, LapResult } from '../../../engine/ingest'
 import { T } from '../../../components/EditableText'
-
-const LINE_HEIGHT_DEGENERATE_SPREAD_M = 0.001
 
 export default function LapTable({
   laps,
   officialSplits,
   construction,
+  windowLaps,
+  speedFromCadence = false,
 }: {
   laps: LapResult[]
   officialSplits: number[]
   construction: LapConstruction
+  /** 1-based laps in the headline CdA window (minus catch exclusions) — rows outside it
+   * grey their CdA, matching the chart. */
+  windowLaps: number[]
+  /** True when speed/distance were reconstructed from cadence — the extra-distance total
+   * is then a gear-guess artefact and is suppressed. */
+  speedFromCadence?: boolean
 }) {
-  const heights = laps.map((l) => l.lineHeightM).filter(Number.isFinite)
-  const heightSpread = heights.length > 0 ? Math.max(...heights) - Math.min(...heights) : 0
   const rawExtraM = construction.extraDistanceM
   const totalExtraM = Math.max(0, rawExtraM)
-  const officialAnchored = construction.lineHeightFromOfficialSplits
+  const inWindow = new Set(windowLaps)
+  const hasOfficial = officialSplits.length > 0
 
   return (
     <section className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
@@ -34,62 +41,74 @@ export default function LapTable({
               <th className="px-2 py-1.5 font-medium">Lap</th>
               <th className="px-2 py-1.5 font-medium">Split</th>
               <th className="px-2 py-1.5 font-medium">Official split</th>
+              {hasOfficial && <th className="px-2 py-1.5 font-medium">Δ vs official</th>}
               <th className="px-2 py-1.5 font-medium">CdA</th>
-              <th className="px-2 py-1.5 font-medium">Line height</th>
               <th className="px-2 py-1.5 font-medium">W</th>
             </tr>
           </thead>
           <tbody>
-            {laps.map((lap, i) => (
-              <tr key={i} className="border-b border-slate-100 last:border-0">
-                <td className="px-2 py-1.5 text-slate-600">{i + 1}</td>
-                <td className="px-2 py-1.5 text-slate-600">{lap.timeS.toFixed(3)}s</td>
-                <td className="px-2 py-1.5 text-slate-600">
-                  {officialSplits[i] != null ? `${officialSplits[i].toFixed(3)}s` : '—'}
-                </td>
-                <td className="px-2 py-1.5 text-slate-600">
-                  {Number.isFinite(lap.cda) ? lap.cda.toFixed(4) : '—'}
-                </td>
-                <td className="px-2 py-1.5 text-slate-600">
-                  {Number.isFinite(lap.lineHeightM) ? `${lap.lineHeightM.toFixed(3)}m` : '—'}
-                </td>
-                <td className="px-2 py-1.5 text-slate-600">{lap.avgP.toFixed(0)}</td>
-              </tr>
-            ))}
+            {laps.map((lap, i) => {
+              const official = officialSplits[i]
+              const delta = official != null && Number.isFinite(lap.timeS) ? lap.timeS - official : null
+              const windowed = inWindow.has(i + 1)
+              return (
+                <tr key={i} className="border-b border-slate-100 last:border-0">
+                  <td className="px-2 py-1.5 text-slate-600">{i + 1}</td>
+                  <td className="px-2 py-1.5 text-slate-600">{lap.timeS.toFixed(3)}s</td>
+                  <td className="px-2 py-1.5 text-slate-600">
+                    {official != null ? `${official.toFixed(3)}s` : '—'}
+                  </td>
+                  {hasOfficial && (
+                    <td className="px-2 py-1.5 text-slate-500">
+                      {delta != null ? `${delta >= 0 ? '+' : '−'}${Math.abs(delta).toFixed(3)}s` : '—'}
+                    </td>
+                  )}
+                  <td
+                    className={`px-2 py-1.5 ${windowed ? 'text-slate-600' : 'text-slate-300'}`}
+                    title={windowed ? undefined : 'Outside the headline CdA window (start laps, final lap, or caught-rider exclusion)'}
+                  >
+                    {Number.isFinite(lap.cda) ? lap.cda.toFixed(4) : '—'}
+                  </td>
+                  <td className="px-2 py-1.5 text-slate-600">{lap.avgP.toFixed(0)}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-slate-600">
+      {speedFromCadence ? (
         <T
-          as="span"
-          id="rides.ridedetail.laptable.total-extra-distance"
-          d="Total extra distance vs. the datum line (laps 3–15): {total} m."
-          vars={{ total: totalExtraM.toFixed(1) }}
+          as="p"
+          className="text-xs text-slate-400"
+          id="rides.ridedetail.laptable.extra-distance-cadence"
+          d="Extra distance vs. the 3,250 m datum isn't reported for this ride — speed and distance are reconstructed from cadence × gear, so the wheel-distance signal it needs doesn't exist here."
         />
-        {rawExtraM < 0 && (
-          <>
-            {' '}
-            <T
-              as="span"
-              className="text-slate-400"
-              id="rides.ridedetail.laptable.clamped-note"
-              d="(measured {raw} m — clamped to 0; a negative reading is a calibration/rollout residual, not riding under the black line)"
-              vars={{ raw: rawExtraM.toFixed(1) }}
-            />
-          </>
-        )}{' '}
-        <T
-          as="span"
-          id="rides.ridedetail.laptable.laps-excluded-note"
-          d="Laps 1–2 and the last lap are excluded — their boundaries carry too much start/finish uncertainty to interpret as line height."
-        />
-      </p>
-      {officialAnchored ? (
-        <T as="p" className="text-xs text-slate-400" id="rides.ridedetail.laptable.per-lap-values-are-anchored" d="Per-lap values are anchored on your official splits. Individual laps still carry ~±0.5 m of boundary noise (adjacent laps anti-correlate) — the average and total above are the robust numbers, since boundary errors cancel in the sum." />
       ) : (
-        heightSpread < LINE_HEIGHT_DEGENERATE_SPREAD_M && (
-          <T as="p" className="text-xs text-slate-400" id="rides.ridedetail.laptable.line-height-is-nearly-identical" d="Line height is nearly identical across laps because without official splits, lap boundaries come from the whole-race calibration factor, which forces each lap&apos;s raw distance to the same value by construction. Add official splits (Edit details) to get genuinely per-lap values." />
-        )
+        <p className="text-xs text-slate-600">
+          <T
+            as="span"
+            id="rides.ridedetail.laptable.total-extra-distance"
+            d="Extra distance ridden vs. the 3,250 m datum (laps 3–15): {total} m."
+            vars={{ total: totalExtraM.toFixed(1) }}
+          />
+          {rawExtraM < 0 && (
+            <>
+              {' '}
+              <T
+                as="span"
+                className="text-slate-400"
+                id="rides.ridedetail.laptable.clamped-note"
+                d="(measured {raw} m — clamped to 0; a negative reading is a calibration/rollout residual, not riding under the black line)"
+                vars={{ raw: rawExtraM.toFixed(1) }}
+              />
+            </>
+          )}{' '}
+          <T
+            as="span"
+            id="rides.ridedetail.laptable.laps-excluded-note"
+            d="Laps 1–2 and lap 16 are excluded — their boundaries carry too much start/finish uncertainty."
+          />
+        </p>
       )}
     </section>
   )

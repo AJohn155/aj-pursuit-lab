@@ -10,6 +10,7 @@
 // difference. Identical times now give ~0 W (−0.4 W for the 0.1 s "beat" margin).
 
 import { solveSettlePowerForTime } from '../../engine/startsplit'
+import type { FullRideAnalysis } from '../../engine/ingest'
 import { analyzeStoredRide } from '../../store/analyzeStoredRide'
 import { resolveScenario } from '../../store/scenario'
 import type { ResolvedScenario } from '../../store/scenario'
@@ -19,6 +20,8 @@ import type { Ride, Settings, Venue } from '../../store/types'
 export interface RideModel {
   ride: Ride
   resolved: ResolvedScenario
+  /** The ride's full analysis — the winner gap chart needs its distance-time series. */
+  full: FullRideAnalysis
   /** The ride's actual first-lap time — official split when present, else constructed. */
   startLapS: number
   /** Settle power at which the model reproduces the ride's own official time. */
@@ -47,6 +50,7 @@ export function buildRideModel(
       model: {
         ride,
         resolved,
+        full,
         startLapS,
         modelSettleW,
         actualExclLap1W: displayPowerExclLap1(full.analysisResult),

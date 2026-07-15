@@ -61,9 +61,12 @@ export default function RideSummary({ ride, full }: { ride: Ride; full: FullRide
       hint: `peak ${r.startMetrics.peakPower.toFixed(0)} W`,
     },
     {
-      label: 'Avg line height',
-      value: Number.isFinite(full.base.laps.avgLineHeightM) ? `${full.base.laps.avgLineHeightM.toFixed(2)} m` : '—',
-      hint: 'laps 3–15',
+      label: 'Extra distance',
+      value:
+        ride.speedSource === 'cadence' || !Number.isFinite(full.base.laps.extraDistanceM)
+          ? '—'
+          : `${Math.max(0, full.base.laps.extraDistanceM).toFixed(1)} m`,
+      hint: 'vs the 3,250 m datum, laps 3–15',
     },
     { label: 'Data quality', value: `${Math.round(full.quality.score)}/100` },
   ]

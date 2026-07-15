@@ -10,7 +10,7 @@ import { linearTrend } from '../Rides/RideDetail/trend'
 import { displayAvgPower, displayPowerExclLap1 } from '../Rides/format'
 import { T } from '../../components/EditableText'
 
-type MetricKey = 'timeS' | 'normalizedTimeS' | 'cda' | 'avgW' | 'powerExclLap1' | 'startTimeS' | 'lineHeightM'
+type MetricKey = 'timeS' | 'normalizedTimeS' | 'cda' | 'avgW' | 'powerExclLap1' | 'startTimeS' | 'extraDistanceM'
 
 const METRICS: { key: MetricKey; label: string; unit: string }[] = [
   { key: 'timeS', label: 'Finish time', unit: 's' },
@@ -19,7 +19,7 @@ const METRICS: { key: MetricKey; label: string; unit: string }[] = [
   { key: 'avgW', label: 'Avg power (recorded)', unit: 'W' },
   { key: 'powerExclLap1', label: 'Power excl. lap 1', unit: 'W' },
   { key: 'startTimeS', label: 'Start time (to 95% cruise)', unit: 's' },
-  { key: 'lineHeightM', label: 'Avg line height (laps 3–15)', unit: 'm' },
+  { key: 'extraDistanceM', label: 'Extra distance vs 3,250 m datum (laps 3–15)', unit: 'm' },
 ]
 
 interface Point {
@@ -33,12 +33,18 @@ interface Point {
   eventName: string
 }
 
-function metricValue(ride: Ride, key: MetricKey, referenceAirDensity: number, settings: Settings): number | null {
+function metricValue(
+  ride: Ride,
+  key: MetricKey,
+  referenceAirDensity: number,
+  settings: Settings,
+  venue?: Venue,
+): number | null {
   switch (key) {
     case 'timeS':
       return ride.officialTimeS
     case 'normalizedTimeS': {
-      const { rho } = resolveRideDensity(ride, settings)
+      const { rho } = resolveRideDensity(ride, settings, venue)
       return equivalentTimeAtRefDensity(ride.officialTimeS, rho, referenceAirDensity)
     }
     case 'cda':
@@ -49,12 +55,13 @@ function metricValue(ride: Ride, key: MetricKey, referenceAirDensity: number, se
       return ride.analysis ? displayPowerExclLap1(ride.analysis) : null
     case 'startTimeS':
       return ride.analysis?.startMetrics.timeTo95PctCruise ?? null
-    case 'lineHeightM': {
-      if (!ride.analysis) return null
-      // Interior laps (3–15) only — laps 1–2/16 are NaN by convention (engine ≥0.4.0);
-      // pre-0.4.0 caches still carry all-16 finite values, which the filter passes through.
-      const finite = ride.analysis.laps.map((l) => l.lineHeightM).filter(Number.isFinite)
-      return finite.length > 0 ? finite.reduce((s, h) => s + h, 0) / finite.length : null
+    case 'extraDistanceM': {
+      // Per-lap line height was dropped (owner round 10) — the telescoping TOTAL over the
+      // 3,250 m interior datum is the robust quantity. Meaningless on cadence-derived
+      // rides (it would only measure the gear guess), so those are skipped.
+      if (ride.speedSource === 'cadence') return null
+      const v = ride.analysis?.extraDistanceM
+      return v != null && Number.isFinite(v) ? Math.max(0, v) : null
     }
   }
 }
@@ -114,7 +121,7 @@ export default function Progression({ rides, venues, rawSettings }: { rides: Rid
           ride,
           date: ride.date,
           dateTime: rideDateTimeKey(ride),
-          value: metricValue(ride, metric, settings.referenceAirDensity, settings),
+          value: metricValue(ride, metric, settings.referenceAirDensity, settings, venue),
           outdoor: venue ? !venue.indoor : false,
           kit: ride.kit,
           eventName: ride.eventName || 'Untitled ride',

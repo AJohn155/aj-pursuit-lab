@@ -2,7 +2,7 @@
 // gap/lap-split/CdA/W′bal/speed-position charts, plus a progression view of any metric vs
 // date across all rides.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { dataStore } from '../../store/DataStore'
 import { analyzeStoredRide } from '../../store/analyzeStoredRide'
 import { resolveRideDensity } from '../../store/density'
@@ -28,7 +28,24 @@ export default function Compare() {
   const settingsRows = useCollection(dataStore.settings)
   const rawSettings = settingsRows.find((s) => s.id === SETTINGS_ID)
 
-  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  // Selections persist across visits (owner request 2026-07 round 10) — stale ids for
+  // deleted rides/scenarios are harmless (the item builder below skips them).
+  const [selectedIds, setSelectedIds] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('compare.selectedIds')
+      const parsed = raw ? (JSON.parse(raw) as unknown) : null
+      return Array.isArray(parsed) && parsed.every((x) => typeof x === 'string') ? parsed : []
+    } catch {
+      return []
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem('compare.selectedIds', JSON.stringify(selectedIds))
+    } catch {
+      // Storage full/unavailable — persistence is best-effort.
+    }
+  }, [selectedIds])
 
   const { items, errors } = useMemo(() => {
     const items: CompareItem[] = []
@@ -60,7 +77,7 @@ export default function Compare() {
             full,
             lapLengthM: venue.lapLengthM,
             officialSplits: ride.officialSplits,
-            rho: resolveRideDensity(ride, settings).rho,
+            rho: resolveRideDensity(ride, settings, venue).rho,
           })
         } catch (e) {
           errors.push(`${ride.eventName || 'Ride'}: ${e instanceof Error ? e.message : String(e)}`)

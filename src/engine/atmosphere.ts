@@ -19,6 +19,27 @@ export function airDensity(tempC: number, pressureHPa: number, rhPct: number): n
 }
 
 /**
+ * ISA (International Standard Atmosphere) station pressure at an altitude, hPa:
+ * P = 1013.25·(1 − 2.25577e−5·h)^5.25588. Sea level → 1013.25; 1,880 m (Colorado
+ * Springs) → ≈807 hPa.
+ */
+export function isaPressureHPa(altitudeM: number): number {
+  return 1013.25 * Math.pow(1 - 2.25577e-5 * altitudeM, 5.25588)
+}
+
+/**
+ * Estimated air density from venue altitude alone (owner request 2026-07 round 10):
+ * ISA pressure at the altitude, with an assumed indoor-velodrome temperature of 20 °C and
+ * 50 % RH. An ESTIMATE for rides where nothing was measured — always flagged as such
+ * (densityKnown stays false → the quality badge keeps its deduction); any measured value
+ * (direct ρ or T/P/RH) wins. 1,880 m → ρ ≈ 0.956 kg/m³ vs the flat 1.15 reference that
+ * previously made altitude rides look artificially slow in normalized time.
+ */
+export function densityFromAltitude(altitudeM: number, tempC = 20, rhPct = 50): number {
+  return airDensity(tempC, isaPressureHPa(altitudeM), rhPct)
+}
+
+/**
  * Fast-mode steady-lap density scale, SPEC §4.12: a steady lap time scales by
  * (ρ_target/ρ_ride)^(1/3). Gate 7c: 15.6 s, ρ_ride 1.1722, ρ_target 0.9934 → ×0.94632.
  */

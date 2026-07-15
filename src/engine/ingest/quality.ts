@@ -22,6 +22,9 @@ export interface QualityInputs {
   cdaM2?: number
   /** True when air density came from a measurement (direct or T/P/RH), not a default. */
   densityKnown: boolean
+  /** True when the unmeasured density was estimated from venue altitude (vs the flat
+   * reference) — same deduction, clearer message. */
+  densityEstimatedFromAltitude?: boolean
   /** True when the speed/distance channels were reconstructed from cadence × gear
    * (speedFallback.ts) because the recorded speed was broken. */
   speedFromCadence?: boolean
@@ -120,7 +123,9 @@ export function assessQuality(inputs: QualityInputs): QualityResult {
   if (!inputs.densityKnown) {
     flags.push({
       code: 'density-missing',
-      message: 'Air density defaulted, not measured',
+      message: inputs.densityEstimatedFromAltitude
+        ? 'Air density estimated from venue altitude (ISA pressure, 20 °C assumed) — not measured'
+        : 'Air density defaulted, not measured',
       deduction: DENSITY_MISSING_DEDUCTION,
     })
   }

@@ -83,6 +83,9 @@ export interface AnalyzeFullOptions extends AnalyzeOptions {
   cpW: CpWInput
   /** True when air density came from a measurement (direct or T/P/RH), not a default (§4.16). */
   densityKnown: boolean
+  /** True when the unmeasured density was estimated from venue altitude (round 10) — same
+   * quality deduction as a plain default, but the flag message says what was assumed. */
+  densityEstimatedFromAltitude?: boolean
 }
 
 /** One point of the continuous W′bal trajectory (SPEC §5.1 "W′bal curve"). */
@@ -284,6 +287,7 @@ export function analyzeRideFull(content: ArrayBuffer | Uint8Array, opts: Analyze
     expectedLapCount,
     cdaM2: base.cdaRaceM2,
     densityKnown: opts.densityKnown,
+    densityEstimatedFromAltitude: opts.densityEstimatedFromAltitude,
     speedFromCadence: opts.speedFromCadence != null,
   })
 

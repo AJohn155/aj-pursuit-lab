@@ -59,7 +59,9 @@ function EditRidePanelInner({
   const [massInput, setMassInput] = useState(String(ride.systemMassKg))
   // Effective density shown (measured, T/P/RH-derived, or the reference fallback); editing
   // it stores a direct per-ride airDensity, which takes priority over T/P/RH.
-  const [rhoInput, setRhoInput] = useState(() => resolveRideDensity(ride, settings).rho.toFixed(4))
+  const [rhoInput, setRhoInput] = useState(() =>
+    resolveRideDensity(ride, settings, venues.find((v) => v.id === ride.venueId)).rho.toFixed(4),
+  )
   const [crrInput, setCrrInput] = useState(String(ride.tyreCrr ?? settings.tyreCrr))
   const [etaInput, setEtaInput] = useState(String(ride.mechEfficiency ?? settings.mechEfficiency))
   const [rolloutInput, setRolloutInput] = useState(String(ride.rolloutM ?? settings.rolloutM))

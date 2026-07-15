@@ -6,14 +6,20 @@ import { Link } from 'react-router-dom'
 import { equivalentTimeAtRefDensity } from '../../engine/index'
 import { dataStore } from '../../store/DataStore'
 import { resolveRideDensity } from '../../store/density'
-import { rideDateTimeKey, SETTINGS_ID, withSettingsDefaults, type Ride } from '../../store/types'
+import { rideDateTimeKey, SETTINGS_ID, withSettingsDefaults, type Ride, type Venue } from '../../store/types'
 import { useCollection } from '../../store/useCollection'
 import { BADGE_CLASSES, displayAvgPower, displayPowerExclLap1, qualityBadgeForScore } from './format'
 
 type SortKey = 'date' | 'timeS' | 'normalizedTimeS' | 'avgW' | 'powerExclLap1' | 'cda' | 'quality'
 
-function buildRow(ride: Ride, venueName: string, referenceAirDensity: number, settings: Parameters<typeof resolveRideDensity>[1]) {
-  const { rho } = resolveRideDensity(ride, settings)
+function buildRow(
+  ride: Ride,
+  venue: Venue | undefined,
+  referenceAirDensity: number,
+  settings: Parameters<typeof resolveRideDensity>[1],
+) {
+  const venueName = venue?.name ?? '—'
+  const { rho } = resolveRideDensity(ride, settings, venue)
   const normalizedTimeS = equivalentTimeAtRefDensity(ride.officialTimeS, rho, referenceAirDensity)
   // Recorded-samples convention app-wide (owner request 2026-07): the SRM-style average,
   // never counting the un-recorded start's zeros.
@@ -38,8 +44,7 @@ export default function RidesList() {
     if (!settings) return []
     // Backfill fields added after this doc was created (see store/types.ts).
     const s = withSettingsDefaults(settings)
-    const venueName = (id: string) => venues.find((v) => v.id === id)?.name ?? '—'
-    const built = rides.map((r) => buildRow(r, venueName(r.venueId), s.referenceAirDensity, s))
+    const built = rides.map((r) => buildRow(r, venues.find((v) => v.id === r.venueId), s.referenceAirDensity, s))
     const term = filter.trim().toLowerCase()
     const filtered = term
       ? built.filter(

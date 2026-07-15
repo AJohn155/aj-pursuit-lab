@@ -15,6 +15,7 @@ import type { ResolvedScenario } from '../../store/scenario'
 import { BADGE_CLASSES, qualityBadgeForScore } from '../Rides/format'
 import type { Event, Ride, Settings, Venue } from '../../store/types'
 import { buildRideModel, wattsToBeat } from './watts'
+import WinnerGapChart from './WinnerGapChart'
 import type { RideModel } from './watts'
 import { T } from '../../components/EditableText'
 
@@ -150,6 +151,8 @@ function RideRecords({ model, event }: { model: RideModel; event: Event }) {
           ))}
         </div>
       </div>
+
+      <WinnerGapChart model={model} event={event} />
     </>
   )
 }

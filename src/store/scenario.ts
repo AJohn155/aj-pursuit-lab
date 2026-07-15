@@ -173,7 +173,7 @@ export function resolveScenario(
     baseGear = BLANK_GEAR
   } else {
     const { ride, venue, full } = baseline
-    const { rho } = resolveRideDensity(ride, settings)
+    const { rho } = resolveRideDensity(ride, settings, venue)
     baseCdaM2 = full.analysisResult.cdaRace
     // Recorded-samples convention app-wide (owner request 2026-07): a fresh analysis always
     // carries avgPowerRecordedW; the lap-average fallback only fires on synthetic inputs.

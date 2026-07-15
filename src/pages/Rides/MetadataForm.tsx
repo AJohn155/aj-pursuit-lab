@@ -7,6 +7,7 @@ import { airDensity as computeAirDensity, effectiveCrr, makeTrack } from '../../
 import type { RiderParams } from '../../engine/index'
 import { ENGINE_VERSION } from '../../engine/constants'
 import { analyzeRideFull, caughtRiderExcludedLaps, defaultCatchExclusionRange, fitStartDate } from '../../engine/ingest'
+import { fallbackDensity } from '../../store/density'
 import { parseSplitsText } from './splits'
 import KitPicker from '../../components/KitPicker'
 import { dataStore } from '../../store/DataStore'
@@ -57,6 +58,7 @@ function MetadataFormInner({
   settings,
 }: MetadataFormProps & { settings: Settings }) {
   const venues = useCollection(dataStore.venues)
+  const existingRides = useCollection(dataStore.rides)
 
   // Prefill the date from the file's own first timestamp (owner request 2026-07 item 11);
   // FIT timestamps are UTC, so this is a prefill the owner can correct, not authoritative.
@@ -132,6 +134,7 @@ function MetadataFormInner({
 
     let rho: number
     let densityKnown: boolean
+    let densityEstimatedFromAltitude = false
     let tempCVal: number | undefined
     let pressureHPaVal: number | undefined
     let humidityPctVal: number | undefined
@@ -160,8 +163,13 @@ function MetadataFormInner({
       pressureHPaVal = p
       humidityPctVal = h
     } else {
-      rho = settings.referenceAirDensity
+      // Venue-altitude estimate when the venue is meaningfully above sea level (owner
+      // request 2026-07 round 10), else the reference default — either way densityKnown
+      // stays false, so the quality badge always flags the unmeasured density.
+      const fb = fallbackDensity(settings, venue)
+      rho = fb.rho
       densityKnown = false
+      densityEstimatedFromAltitude = fb.source === 'altitude'
     }
 
     const massKg = systemMassKg === '' ? settings.systemMassKg : systemMassKg
@@ -209,6 +217,7 @@ function MetadataFormInner({
         track,
         cpW,
         densityKnown,
+        densityEstimatedFromAltitude,
         // The form's CURRENT gear/rollout drive the reconstruction (the owner may have
         // corrected them since the detection step), not the detection-step snapshot.
         speedFromCadence: detection.speedFromCadence
@@ -221,6 +230,16 @@ function MetadataFormInner({
       })
 
       const fitFileB64 = bytesToBase64(detection.fitBytes)
+      // Duplicate guard (owner round 10): SRM filenames repeat easily; the same bytes
+      // uploaded twice would silently create a twin ride.
+      const dup = existingRides.find((r) => r.fitFileB64 === fitFileB64)
+      if (dup) {
+        setError(
+          `This exact .fit file is already uploaded as “${dup.eventName || 'Untitled ride'}” (${dup.date}). Delete that ride first if you meant to replace it.`,
+        )
+        setSaving(false)
+        return
+      }
       if (fitFileB64.length > FIT_FILE_B64_MAX_BYTES) {
         setError(
           `This file encodes to ${(fitFileB64.length / 1000).toFixed(0)} KB, over the ${FIT_FILE_B64_MAX_BYTES / 1000} KB guard (Firestore 1 MB doc limit) — the ride was not saved.`,
@@ -402,8 +421,24 @@ function MetadataFormInner({
         )}
         {densityMode === 'unknown' && (
           <p className="text-xs text-amber-700">
-            Falls back to the reference density in Settings; the quality badge will flag it as
-            defaulted.
+            {venue && fallbackDensity(settings, venue).source === 'altitude' ? (
+              <T
+                as="span"
+                id="rides.metadataform.density-altitude-note"
+                d="Estimated from {venue}'s altitude ({alt} m): ρ ≈ {rho} kg/m³ (ISA pressure, 20 °C assumed). The quality badge will still flag that density wasn't measured."
+                vars={{
+                  venue: venue.name,
+                  alt: venue.altitudeM,
+                  rho: fallbackDensity(settings, venue).rho.toFixed(4),
+                }}
+              />
+            ) : (
+              <T
+                as="span"
+                id="rides.metadataform.density-unknown-note"
+                d="Falls back to the reference density in Settings (venues ≥300 m altitude get an altitude estimate instead); the quality badge will flag it as unmeasured."
+              />
+            )}
           </p>
         )}
       </fieldset>

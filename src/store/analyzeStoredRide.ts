@@ -20,7 +20,7 @@ export function analyzeStoredRide(ride: Ride, venue: Venue, rawSettings: Setting
   // missing cpW/wPrimeJ would otherwise flow into wPrimeBalance as undefined → NaN.
   const settings = withSettingsDefaults(rawSettings)
   const fitBytes = base64ToBytes(ride.fitFileB64)
-  const { rho, densityKnown } = resolveRideDensity(ride, settings)
+  const { rho, densityKnown, source: densitySource } = resolveRideDensity(ride, settings, venue)
   const track = makeTrack(venue.lapLengthM, venue.bendRadiusM)
   // Per-ride physics overrides (owner request 2026-07 round 4, item 7) — a ride carrying
   // its own Crr/η uses those; otherwise the current global settings apply, as before.
@@ -41,6 +41,7 @@ export function analyzeStoredRide(ride: Ride, venue: Venue, rawSettings: Setting
     track,
     cpW,
     densityKnown,
+    densityEstimatedFromAltitude: densitySource === 'altitude',
     // Rides whose speed channel was broken at upload re-derive speed/distance from
     // cadence × this ride's gear + rollout on every analysis (owner request 2026-07 r5).
     speedFromCadence:
