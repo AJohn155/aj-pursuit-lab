@@ -35,8 +35,17 @@ export default function RideSummary({ ride, full }: { ride: Ride; full: FullRide
     {
       label: `CdA (${windowText})`,
       value: `${r.cdaRace.toFixed(4)} m²`,
-      hint: `± ${r.ci.toFixed(4)} (95% CI)${ride.flags.caughtRider && ride.caughtAtLap != null ? ' · catch laps excluded' : ''}`,
+      hint: `± ${r.ci.toFixed(4)} (95% CI)${r.cdaExclCatch != null ? ' · full window incl. catch laps' : ''}`,
     },
+    ...(r.cdaExclCatch != null
+      ? [
+          {
+            label: `CdA excl. catch (${describeWindow(r.cdaExclCatchLaps ?? [])})`,
+            value: `${r.cdaExclCatch.toFixed(4)} m²`,
+            hint: `± ${(r.cdaExclCatchCi ?? 0).toFixed(4)} — your own aero, draft/pass laps removed`,
+          },
+        ]
+      : []),
     {
       label: 'Avg power',
       value: Number.isFinite(r.avgPowerRecordedW ?? Number.NaN) ? `${(r.avgPowerRecordedW as number).toFixed(0)} W` : '—',
@@ -72,7 +81,7 @@ export default function RideSummary({ ride, full }: { ride: Ride; full: FullRide
         ))}
       </div>
       <p className="mt-3 text-sm leading-relaxed text-slate-600">{narrative(ride, full)}</p>
-      <T as="p" className="mt-1 text-xs text-slate-400" id="rides.ridedetail.summary.convention-note" d="Power conventions: “avg power” averages recorded samples (SRM-style, the app-wide convention); “excl. lap 1” averages from the lap-2 line to the finish. CdA is the single energy balance over the steady window (laps 3–15, minus any caught-rider laps) — the number the per-lap chart scatters around. Lap 16 is excluded like line height: its end boundary inherits the start-anchor timing error, and an error there lands in the post-line coast-down, which the balance misreads as drag." />
+      <T as="p" className="mt-1 text-xs text-slate-400" id="rides.ridedetail.summary.convention-note" d="Power conventions: “avg power” averages recorded samples (SRM-style, the app-wide convention); “excl. lap 1” averages from the lap-2 line to the finish. CdA is the single energy balance over laps 3–15 — the app-wide number. On caught rides, “CdA excl. catch” removes the exclusion-range laps (editable in Edit details): the clean estimate of your own aero. Lap 16 is excluded like line height: its end boundary inherits the start-anchor timing error, and an error there lands in the post-line coast-down, which the balance misreads as drag." />
     </section>
   )
 }
@@ -125,8 +134,8 @@ function narrative(ride: Ride, full: FullRideAnalysis): string {
   }
 
   const catchNote =
-    ride.flags.caughtRider && ride.caughtAtLap != null
-      ? ` (laps around the lap-${ride.caughtAtLap} catch excluded — draft + passing line aren't your own aero)`
+    r.cdaExclCatch != null && ride.caughtAtLap != null
+      ? `; excluding the laps around the lap-${ride.caughtAtLap} catch (draft + passing line aren't your own aero), it reads ${r.cdaExclCatch.toFixed(4)}`
       : ''
   parts.push(
     `Total CdA ${r.cdaRace.toFixed(4)} ± ${r.ci.toFixed(4)} m²${catchNote}${ride.speedSource === 'cadence' ? ' (speed reconstructed from cadence × gear — treat aero numbers with care)' : ''}.`,

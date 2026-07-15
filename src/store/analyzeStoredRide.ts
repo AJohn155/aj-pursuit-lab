@@ -47,10 +47,11 @@ export function analyzeStoredRide(ride: Ride, venue: Venue, rawSettings: Setting
       ride.speedSource === 'cadence'
         ? { ...ride.gear, rolloutM: ride.rolloutM ?? settings.rolloutM }
         : undefined,
-    // Caught-rider control (round 6): drop the laps around the catch from the CdA window.
+    // Caught-rider control (round 6, reworked round 8): the laps around the catch feed
+    // the cdaExclCatch companion. Owner-edited range wins; else the default (−2 → +1).
     excludeCdaLaps:
       ride.flags.caughtRider && ride.caughtAtLap != null
-        ? caughtRiderExcludedLaps(ride.caughtAtLap)
+        ? caughtRiderExcludedLaps(ride.caughtAtLap, ride.caughtExcludeFromLap, ride.caughtExcludeToLap)
         : undefined,
   })
 }

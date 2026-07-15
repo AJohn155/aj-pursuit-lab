@@ -158,11 +158,18 @@ export interface Ride extends Persisted {
   /**
    * Where another rider was caught, in laps from the start (e.g. 7.5 = mid-lap-8), owner
    * request 2026-07 round 6. Only meaningful with flags.caughtRider. Drives the CdA
-   * control: laps within ±1 lap of the catch are excluded from the steady CdA window
-   * (draft on approach + off-line pass aren't the rider's own aero) and shaded on the
-   * rolling-CdA chart.
+   * control: the exclusion-range laps are removed for the `cdaExclCatch` companion
+   * estimate (draft on approach + off-line pass aren't the rider's own aero) and the
+   * catch is shaded on the rolling-CdA chart.
    */
   caughtAtLap?: number
+  /**
+   * Owner-editable exclusion range for the catch (round 8), 1-based inclusive lap
+   * numbers. Absent = the default derived from caughtAtLap (2 laps before → 1 lap after,
+   * defaultCatchExclusionRange). Only meaningful with flags.caughtRider.
+   */
+  caughtExcludeFromLap?: number
+  caughtExcludeToLap?: number
   result?: string
   fitFileB64?: string
   analysis?: AnalysisResult

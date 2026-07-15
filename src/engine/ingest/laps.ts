@@ -201,24 +201,49 @@ export function lapBoundaryVComs(tl: Timeline, laps: LapConstruction): BoundaryV
 }
 
 /**
- * Laps to exclude from the steady CdA window when another rider was caught (owner request
- * 2026-07 round 6): catching means riding through the other rider's draft on approach
- * (CdA reads low) then coming off the racing line to pass (extra path + dirty air — CdA
- * reads high), so the energy balance around the catch isn't the rider's own aero.
- * Documented choice: exclude every lap whose span intersects (catchLap − 1, catchLap + 1)
- * — e.g. a catch at lap 7.5 excludes laps 7, 8, and 9. 1-based lap numbers, clamped to
- * [1, lapCount].
+ * Default lap range to exclude from the steady CdA window when another rider was caught
+ * (owner convention 2026-07 round 8): 2 laps before the catch to 1 lap after — the
+ * approach is ridden in the other rider's growing draft (CdA reads low; his Pan Am data
+ * shows the slide starting ~1.5 laps out) and the pass comes off the racing line (CdA
+ * reads high). Every lap whose span intersects (catchLap − 2, catchLap + 1) is excluded —
+ * a catch at lap 7.5 excludes laps 6–9. The range is a per-ride editable field
+ * (Ride.caughtExcludeFromLap/ToLap); this is only its prefill. 1-based inclusive, clamped
+ * to [1, lapCount]; null when the catch position is unusable.
  */
-export function caughtRiderExcludedLaps(caughtAtLap: number, lapCount = N_LAPS): number[] {
-  if (!Number.isFinite(caughtAtLap) || caughtAtLap <= 0) return []
-  const lo = caughtAtLap - 1
-  const hi = caughtAtLap + 1
+export function defaultCatchExclusionRange(
+  caughtAtLap: number,
+  lapCount = N_LAPS,
+): { fromLap: number; toLap: number } | null {
+  if (!Number.isFinite(caughtAtLap) || caughtAtLap <= 0) return null
+  // Lap n spans (n−1, n) in lap units; first lap intersecting (catch−2, ·) and last lap
+  // intersecting (·, catch+1).
+  const fromLap = Math.max(1, Math.floor(caughtAtLap - 2) + 1)
+  const toLap = Math.min(lapCount, Math.ceil(caughtAtLap + 1))
+  return fromLap <= toLap ? { fromLap, toLap } : null
+}
+
+/** Expand an inclusive 1-based lap range into the lap-number list the engine consumes. */
+export function lapRangeToLaps(fromLap: number, toLap: number, lapCount = N_LAPS): number[] {
   const out: number[] = []
-  for (let n = 1; n <= lapCount; n++) {
-    // Lap n spans (n−1, n) in lap units.
-    if (n > lo && n - 1 < hi) out.push(n)
-  }
+  for (let n = Math.max(1, Math.round(fromLap)); n <= Math.min(lapCount, Math.round(toLap)); n++) out.push(n)
   return out
+}
+
+/**
+ * Laps to exclude for a caught rider given the ride's (possibly owner-edited) range, or
+ * the default range derived from the catch position.
+ */
+export function caughtRiderExcludedLaps(
+  caughtAtLap: number,
+  fromLap?: number,
+  toLap?: number,
+  lapCount = N_LAPS,
+): number[] {
+  if (fromLap != null && toLap != null && Number.isFinite(fromLap) && Number.isFinite(toLap)) {
+    return lapRangeToLaps(fromLap, toLap, lapCount)
+  }
+  const def = defaultCatchExclusionRange(caughtAtLap, lapCount)
+  return def ? lapRangeToLaps(def.fromLap, def.toLap, lapCount) : []
 }
 
 /** A Sample plus its cumulative calibrated (datum) distance from the race start, m. */

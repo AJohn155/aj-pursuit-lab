@@ -30,7 +30,7 @@ export default function RideSelector({
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
       <T as="h2" className="mb-2 text-sm font-semibold text-slate-900" id="compare.rideselector.rides-to-compare" d="Rides to compare" />
-      <T as="p" className="mb-3 text-xs text-slate-500" id="compare.rideselector.pick-2-or-more-the" d="Pick 2 or more. The first ride checked is the reference for the gap chart." />
+      <T as="p" className="mb-3 text-xs text-slate-500" id="compare.rideselector.pick-2-or-more-the" d="Pick 2 or more. The gap chart's reference defaults to the first selection — change it with the Reference picker on the chart." />
       <div className="max-h-72 overflow-y-auto rounded-lg border border-slate-100">
         <table className="w-full min-w-[520px] text-left text-sm">
           <tbody>
@@ -68,9 +68,7 @@ export default function RideSelector({
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-xs text-slate-500">
-                    {selected ? (idx === 0 ? 'Reference' : `#${idx + 1}`) : ''}
-                  </td>
+                  <td className="px-3 py-2 text-xs text-slate-500">{selected ? `#${idx + 1}` : ''}</td>
                 </tr>
               )
             })}

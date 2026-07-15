@@ -118,12 +118,14 @@ export interface GapSeries {
   gapS: number[]
 }
 
-/** Cumulative time-delta vs distance, first ride = reference (SPEC §5.2 gap chart). */
-export function gapCharts(seriesList: DistanceTimeSeries[]): GapSeries[] {
+/** Cumulative time-delta vs distance (SPEC §5.2 gap chart). The reference defaults to the
+ * first series; `refIndex` picks another (owner request 2026-07 round 8 — a "set as
+ * reference" control instead of re-ordering selections). */
+export function gapCharts(seriesList: DistanceTimeSeries[], refIndex = 0): GapSeries[] {
   if (seriesList.length === 0) return []
   const grid: number[] = []
   for (let d = 0; d <= RACE_DISTANCE_M; d += GAP_GRID_STEP_M) grid.push(d)
-  const reference = seriesList[0]
+  const reference = seriesList[Math.max(0, Math.min(seriesList.length - 1, refIndex))]
   const refTimes = grid.map((d) => timeAtDistance(reference, d))
   return seriesList.map((series) => ({
     distM: grid,

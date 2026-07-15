@@ -9,6 +9,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import KitPicker from '../../../components/KitPicker'
 import { ENGINE_VERSION } from '../../../engine/constants'
+import { defaultCatchExclusionRange } from '../../../engine/ingest'
 import { dataStore } from '../../../store/DataStore'
 import { analyzeStoredRide } from '../../../store/analyzeStoredRide'
 import { resolveRideDensity } from '../../../store/density'
@@ -66,7 +67,25 @@ function EditRidePanelInner({
   // missed "caught rider" tick). Outdoor stays venue-derived, so only these two are shown.
   const [caughtRider, setCaughtRider] = useState(ride.flags.caughtRider)
   const [caughtAtLap, setCaughtAtLap] = useState(ride.caughtAtLap != null ? String(ride.caughtAtLap) : '')
+  // Exclusion range (round 8): the ride's own saved range, else the default for its catch.
+  const [caughtFrom, setCaughtFrom] = useState(() => {
+    if (ride.caughtExcludeFromLap != null) return String(ride.caughtExcludeFromLap)
+    const def = ride.caughtAtLap != null ? defaultCatchExclusionRange(ride.caughtAtLap) : null
+    return def ? String(def.fromLap) : ''
+  })
+  const [caughtTo, setCaughtTo] = useState(() => {
+    if (ride.caughtExcludeToLap != null) return String(ride.caughtExcludeToLap)
+    const def = ride.caughtAtLap != null ? defaultCatchExclusionRange(ride.caughtAtLap) : null
+    return def ? String(def.toLap) : ''
+  })
   const [interrupted, setInterrupted] = useState(ride.flags.interrupted)
+
+  function handleCaughtAtLapChange(value: string) {
+    setCaughtAtLap(value)
+    const def = defaultCatchExclusionRange(Number.parseFloat(value))
+    setCaughtFrom(def ? String(def.fromLap) : '')
+    setCaughtTo(def ? String(def.toLap) : '')
+  }
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -98,6 +117,18 @@ function EditRidePanelInner({
       setError('“Caught at lap” must be between 0 and 16 (e.g. 7.5), or left blank.')
       return
     }
+    const caughtFromVal = caughtFrom.trim() === '' ? undefined : Number.parseInt(caughtFrom, 10)
+    const caughtToVal = caughtTo.trim() === '' ? undefined : Number.parseInt(caughtTo, 10)
+    if (
+      caughtRider &&
+      caughtAtLapVal != null &&
+      caughtFromVal != null &&
+      caughtToVal != null &&
+      !(caughtFromVal >= 1 && caughtToVal <= 16 && caughtFromVal <= caughtToVal)
+    ) {
+      setError('Catch exclusion range must satisfy 1 ≤ from ≤ to ≤ 16.')
+      return
+    }
 
     const updated: Ride = {
       ...ride,
@@ -117,6 +148,8 @@ function EditRidePanelInner({
       rolloutM: rollout,
       flags: { outdoor: !venue.indoor, caughtRider, interrupted },
       caughtAtLap: caughtRider ? caughtAtLapVal : undefined,
+      caughtExcludeFromLap: caughtRider ? caughtFromVal : undefined,
+      caughtExcludeToLap: caughtRider ? caughtToVal : undefined,
       updatedAt: new Date().toISOString(),
     }
 
@@ -220,22 +253,47 @@ function EditRidePanelInner({
           Caught rider
         </label>
         {caughtRider && (
-          <label className="flex items-center gap-2">
-            at lap
-            <input
-              type="number"
-              step="0.25"
-              min="1"
-              max="16"
-              value={caughtAtLap}
-              onChange={(e) => setCaughtAtLap(e.target.value)}
-              placeholder="7.5"
-              className="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm"
-            />
+          <span className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2">
+              at lap
+              <input
+                type="number"
+                step="0.25"
+                min="1"
+                max="16"
+                value={caughtAtLap}
+                onChange={(e) => handleCaughtAtLapChange(e.target.value)}
+                placeholder="7.5"
+                className="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm"
+              />
+            </label>
+            <label className="flex items-center gap-2">
+              exclude laps
+              <input
+                type="number"
+                step="1"
+                min="1"
+                max="16"
+                value={caughtFrom}
+                onChange={(e) => setCaughtFrom(e.target.value)}
+                className="w-16 rounded-md border border-slate-300 px-2 py-1 text-sm"
+              />
+              –
+              <input
+                type="number"
+                step="1"
+                min="1"
+                max="16"
+                value={caughtTo}
+                onChange={(e) => setCaughtTo(e.target.value)}
+                className="w-16 rounded-md border border-slate-300 px-2 py-1 text-sm"
+              />
+            </label>
             <span className="text-xs text-slate-500">
-              laps within ±1 of the catch are excluded from the CdA window (saving re-analyzes)
+              default 2 before → 1 after; drives “CdA excl. catch” (full CdA stays reported) — saving
+              re-analyzes
             </span>
-          </label>
+          </span>
         )}
         <label className="flex items-center gap-2">
           <input type="checkbox" checked={interrupted} onChange={(e) => setInterrupted(e.target.checked)} />

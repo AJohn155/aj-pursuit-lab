@@ -8,6 +8,7 @@ import {
   analyzeRide,
   buildTimeline,
   caughtRiderExcludedLaps,
+  defaultCatchExclusionRange,
   computeAccelDecel,
   constructHalfLaps,
   constructLaps,
@@ -279,30 +280,42 @@ describe('speed-vs-position overlay on fixtures (SPEC §5.1)', () => {
   })
 })
 
-describe('caught-rider CdA control (owner request 2026-07 round 6)', () => {
-  it('caughtRiderExcludedLaps excludes every lap intersecting catch ± 1 lap', () => {
-    expect(caughtRiderExcludedLaps(7.5)).toEqual([7, 8, 9])
-    expect(caughtRiderExcludedLaps(8)).toEqual([8, 9]) // (7,9): lap 8 (7,8) and lap 9 (8,9)
+describe('caught-rider CdA control (owner request 2026-07 rounds 6+8)', () => {
+  it('default exclusion range is 2 laps before → 1 lap after the catch', () => {
+    expect(caughtRiderExcludedLaps(7.5)).toEqual([6, 7, 8, 9])
+    expect(caughtRiderExcludedLaps(8)).toEqual([7, 8, 9]) // (6,9): laps 7, 8, 9
     expect(caughtRiderExcludedLaps(1.2)).toEqual([1, 2, 3])
-    expect(caughtRiderExcludedLaps(15.9)).toEqual([15, 16])
+    expect(caughtRiderExcludedLaps(15.9)).toEqual([14, 15, 16])
     expect(caughtRiderExcludedLaps(Number.NaN)).toEqual([])
+    expect(defaultCatchExclusionRange(7.5)).toEqual({ fromLap: 6, toLap: 9 })
   })
 
-  it('excludeCdaLaps removes the laps from the steady window and moves the headline', () => {
+  it('an owner-edited range overrides the default', () => {
+    expect(caughtRiderExcludedLaps(7.5, 7, 8)).toEqual([7, 8])
+    expect(caughtRiderExcludedLaps(7.5, 5, 10)).toEqual([5, 6, 7, 8, 9, 10])
+  })
+
+  it('excludeCdaLaps leaves the full-window headline untouched and fills the cdaExcl companion', () => {
     const bytes = fs.readFileSync(`${fixturesDir}SRM_PM9_ANDERS_TP_2025-10-24_13-18-40.fit`)
     const base = { officialTimeS: 246.793, rho: 1.122, params, track }
     const plain = analyzeRide(bytes, base)
-    const excluded = analyzeRide(bytes, { ...base, excludeCdaLaps: caughtRiderExcludedLaps(7.5) })
+    const withCatch = analyzeRide(bytes, { ...base, excludeCdaLaps: caughtRiderExcludedLaps(7.5) })
 
-    expect(plain.cdaWindowLaps).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
-    expect(excluded.cdaWindowLaps).toEqual([3, 4, 5, 6, 10, 11, 12, 13, 14, 15])
-    expect(excluded.cdaPerLapM2).toHaveLength(10)
-    // The gap-safe balance must aggregate per-lap terms: the headline over the holed
-    // window equals the aero-denominator-weighted combination of the kept laps, so it
-    // must sit strictly inside the kept per-lap range and differ from the full window.
-    expect(excluded.cdaRaceM2).not.toBeCloseTo(plain.cdaRaceM2, 4)
-    expect(excluded.cdaRaceM2).toBeGreaterThan(Math.min(...excluded.cdaPerLapM2))
-    expect(excluded.cdaRaceM2).toBeLessThan(Math.max(...excluded.cdaPerLapM2))
+    // Round 8: the app-wide cdaRace is ALWAYS the full 3–15 window; the catch exclusion
+    // produces the side-by-side companion instead of replacing it.
+    expect(withCatch.cdaRaceM2).toBeCloseTo(plain.cdaRaceM2, 10)
+    expect(withCatch.cdaWindowLaps).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
+    expect(plain.cdaExcl).toBeUndefined()
+    expect(withCatch.cdaExcl).toBeDefined()
+    expect(withCatch.cdaExcl!.windowLaps).toEqual([3, 4, 5, 10, 11, 12, 13, 14, 15])
+    // The gap-safe balance aggregates per-lap terms: the companion must differ from the
+    // full window and sit strictly inside the kept per-lap range.
+    expect(withCatch.cdaExcl!.cdaM2).not.toBeCloseTo(plain.cdaRaceM2, 4)
+    const keptPerLap = withCatch.cdaPerLapM2.filter((_, i) =>
+      withCatch.cdaExcl!.windowLaps.includes(withCatch.cdaWindowLaps[i]),
+    )
+    expect(withCatch.cdaExcl!.cdaM2).toBeGreaterThan(Math.min(...keptPerLap))
+    expect(withCatch.cdaExcl!.cdaM2).toBeLessThan(Math.max(...keptPerLap))
   })
 
   it('a contiguous window gives the same headline via the aggregated and concatenated balances', () => {

@@ -147,7 +147,7 @@ export default function RideDetail() {
       <CdaCharts
         laps={full.analysisResult.laps}
         rolling={full.rolling}
-        windowLaps={full.base.cdaWindowLaps}
+        windowLaps={full.base.cdaExcl?.windowLaps ?? full.base.cdaWindowLaps}
         catchLap={ride.flags.caughtRider ? ride.caughtAtLap : undefined}
         lapLengthM={venue.lapLengthM}
       />

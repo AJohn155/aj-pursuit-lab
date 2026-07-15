@@ -6,7 +6,7 @@ import type { FormEvent } from 'react'
 import { airDensity as computeAirDensity, effectiveCrr, makeTrack } from '../../engine/index'
 import type { RiderParams } from '../../engine/index'
 import { ENGINE_VERSION } from '../../engine/constants'
-import { analyzeRideFull, caughtRiderExcludedLaps, fitStartDate } from '../../engine/ingest'
+import { analyzeRideFull, caughtRiderExcludedLaps, defaultCatchExclusionRange, fitStartDate } from '../../engine/ingest'
 import { parseSplitsText } from './splits'
 import KitPicker from '../../components/KitPicker'
 import { dataStore } from '../../store/DataStore'
@@ -91,7 +91,18 @@ function MetadataFormInner({
   const [notes, setNotes] = useState('')
   const [caughtRider, setCaughtRider] = useState(false)
   const [caughtAtLap, setCaughtAtLap] = useState('')
+  // Exclusion range for the catch (round 8): prefilled from the catch position (−2 → +1),
+  // editable. Re-prefilled whenever the catch position changes.
+  const [caughtFrom, setCaughtFrom] = useState('')
+  const [caughtTo, setCaughtTo] = useState('')
   const [interrupted, setInterrupted] = useState(false)
+
+  function handleCaughtAtLapChange(value: string) {
+    setCaughtAtLap(value)
+    const def = defaultCatchExclusionRange(Number.parseFloat(value))
+    setCaughtFrom(def ? String(def.fromLap) : '')
+    setCaughtTo(def ? String(def.toLap) : '')
+  }
   const [result, setResult] = useState('')
   const [officialTimeS, setOfficialTimeS] = useState(String(detection.officialTimeS))
   const [splitsText, setSplitsText] = useState('')
@@ -166,6 +177,18 @@ function MetadataFormInner({
       setError('“Caught at lap” must be between 0 and 16 (e.g. 7.5), or left blank.')
       return
     }
+    const caughtFromVal = caughtFrom.trim() === '' ? undefined : Number.parseInt(caughtFrom, 10)
+    const caughtToVal = caughtTo.trim() === '' ? undefined : Number.parseInt(caughtTo, 10)
+    if (
+      caughtRider &&
+      caughtAtLapVal != null &&
+      caughtFromVal != null &&
+      caughtToVal != null &&
+      !(caughtFromVal >= 1 && caughtToVal <= 16 && caughtFromVal <= caughtToVal)
+    ) {
+      setError('Catch exclusion range must satisfy 1 ≤ from ≤ to ≤ 16.')
+      return
+    }
     const track = makeTrack(venue.lapLengthM, venue.bendRadiusM)
     const params: RiderParams = {
       massKg,
@@ -193,7 +216,7 @@ function MetadataFormInner({
           : undefined,
         excludeCdaLaps:
           caughtRider && Number.isFinite(caughtAtLapVal)
-            ? caughtRiderExcludedLaps(caughtAtLapVal as number)
+            ? caughtRiderExcludedLaps(caughtAtLapVal as number, caughtFromVal, caughtToVal)
             : undefined,
       })
 
@@ -233,6 +256,8 @@ function MetadataFormInner({
         notes,
         flags: { outdoor: !venue.indoor, caughtRider, interrupted },
         caughtAtLap: caughtRider ? caughtAtLapVal : undefined,
+        caughtExcludeFromLap: caughtRider ? caughtFromVal : undefined,
+        caughtExcludeToLap: caughtRider ? caughtToVal : undefined,
         result: result || undefined,
         fitFileB64,
         analysis: full.analysisResult,
@@ -446,22 +471,47 @@ function MetadataFormInner({
           Caught rider
         </label>
         {caughtRider && (
-          <label className="flex items-center gap-2">
-            at lap
-            <input
-              type="number"
-              step="0.25"
-              min="1"
-              max="16"
-              value={caughtAtLap}
-              onChange={(e) => setCaughtAtLap(e.target.value)}
-              placeholder="7.5"
-              className="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm"
-            />
+          <span className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2">
+              at lap
+              <input
+                type="number"
+                step="0.25"
+                min="1"
+                max="16"
+                value={caughtAtLap}
+                onChange={(e) => handleCaughtAtLapChange(e.target.value)}
+                placeholder="7.5"
+                className="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm"
+              />
+            </label>
+            <label className="flex items-center gap-2">
+              exclude laps
+              <input
+                type="number"
+                step="1"
+                min="1"
+                max="16"
+                value={caughtFrom}
+                onChange={(e) => setCaughtFrom(e.target.value)}
+                className="w-16 rounded-md border border-slate-300 px-2 py-1 text-sm"
+              />
+              –
+              <input
+                type="number"
+                step="1"
+                min="1"
+                max="16"
+                value={caughtTo}
+                onChange={(e) => setCaughtTo(e.target.value)}
+                className="w-16 rounded-md border border-slate-300 px-2 py-1 text-sm"
+              />
+            </label>
             <span className="text-xs text-slate-500">
-              laps within ±1 of the catch are excluded from the CdA window
+              default 2 before → 1 after the catch; drives the “CdA excl. catch” companion (the full
+              laps 3–15 CdA is still reported)
             </span>
-          </label>
+          </span>
         )}
         <label className="flex items-center gap-2">
           <input type="checkbox" checked={interrupted} onChange={(e) => setInterrupted(e.target.checked)} />

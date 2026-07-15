@@ -145,6 +145,14 @@ export default function RidesList() {
                       no splits
                     </Link>
                   )}
+                  {ride.flags.caughtRider && (
+                    <span
+                      title={`Caught a rider${ride.caughtAtLap != null ? ` around lap ${ride.caughtAtLap}` : ''} — the CdA column shows the full number and the catch-excluded one.`}
+                      className="ml-2 whitespace-nowrap rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-800"
+                    >
+                      caught{ride.caughtAtLap != null ? ` L${ride.caughtAtLap}` : ''}
+                    </span>
+                  )}
                   <p className="text-xs text-slate-500">{venueName}</p>
                 </td>
                 <td className="px-3 py-2 text-slate-600">
@@ -157,7 +165,14 @@ export default function RidesList() {
                 <td className="px-3 py-2 text-slate-600">
                   {powerExclLap1 != null ? `${powerExclLap1.toFixed(0)} W` : '—'}
                 </td>
-                <td className="px-3 py-2 text-slate-600">{cda != null ? cda.toFixed(4) : '—'}</td>
+                <td className="px-3 py-2 text-slate-600">
+                  {cda != null ? cda.toFixed(4) : '—'}
+                  {ride.analysis?.cdaExclCatch != null && (
+                    <span className="block whitespace-nowrap text-xs text-slate-400" title="Catch-excluded CdA — your own aero with the draft/pass laps removed">
+                      excl. {ride.analysis.cdaExclCatch.toFixed(4)}
+                    </span>
+                  )}
+                </td>
                 <td className="px-3 py-2">
                   {quality != null ? (
                     <span

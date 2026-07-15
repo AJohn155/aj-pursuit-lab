@@ -29,10 +29,10 @@ export interface AnalyzeOptions {
    */
   speedFromCadence?: { chainring: number; cog: number; rolloutM: number }
   /**
-   * 1-based laps to drop from the steady CdA window (owner request 2026-07 round 6) —
-   * e.g. the laps around catching another rider (caughtRiderExcludedLaps), whose energy
-   * balance reflects draft + passing line rather than the rider's own aero. The per-lap
-   * table still reports them; only cdaRace/CI skip them.
+   * 1-based laps around a caught rider (caughtRiderExcludedLaps), whose energy balance
+   * reflects draft + passing line rather than the rider's own aero. Since round 8 these no
+   * longer change `cdaRaceM2` (the full-window number stays the app-wide value); they
+   * produce the `cdaExcl` companion estimate reported alongside it.
    */
   excludeCdaLaps?: number[]
 }
@@ -41,12 +41,19 @@ export interface RideAnalysis {
   timeline: Timeline
   detection: Detection
   laps: LapConstruction
-  /** cdaRace over the steady window (laps 3–15 minus any exclusions), m². */
+  /** cdaRace over the FULL steady window (laps 3–15, no catch exclusions), m². */
   cdaRaceM2: number
   cdaCi95: number
   cdaPerLapM2: number[]
-  /** The 1-based laps the steady CdA window actually used (3–15 minus exclusions/gaps). */
+  /** The 1-based laps of the full steady window (3–15, minus data gaps only). */
   cdaWindowLaps: number[]
+  /**
+   * The catch-excluded CdA (owner request 2026-07 round 8): the same balance with the
+   * caught-rider laps removed. Present only when exclusions were requested. The full
+   * number stays the app-wide `cdaRaceM2`; this is the "your own aero" companion shown
+   * alongside it on caught rides.
+   */
+  cdaExcl?: { cdaM2: number; ci95: number; windowLaps: number[] }
   startMetrics: StartMetrics
   reproduction: ReproResult
 }
@@ -85,15 +92,33 @@ export function analyzeRide(content: ArrayBuffer | Uint8Array, opts: AnalyzeOpti
   // every lap, which biased every per-lap CdA high (2026-07 round 5 item 1). Kept aligned
   // with the groups by filtering both on the same predicate.
   const allBounds = lapBoundaryVComs(timeline, laps)
-  const excluded = new Set(opts.excludeCdaLaps ?? [])
-  const keep = groups.map(
-    (g, ln) =>
-      ln + 1 >= STEADY_FIRST_LAP && ln + 1 <= STEADY_LAST_LAP && !excluded.has(ln + 1) && g.length > 0,
-  )
-  const steady = groups.filter((_, ln) => keep[ln])
-  const boundaryVComs = allBounds.filter((_, ln) => keep[ln])
-  const cdaWindowLaps = keep.flatMap((k, ln) => (k ? [ln + 1] : []))
-  const cda = cdaRace(steady, opts.rho, opts.params, opts.track, boundaryVComs)
+  const windowFor = (excludedLaps: Set<number>) => {
+    const keep = groups.map(
+      (g, ln) =>
+        ln + 1 >= STEADY_FIRST_LAP && ln + 1 <= STEADY_LAST_LAP && !excludedLaps.has(ln + 1) && g.length > 0,
+    )
+    return {
+      steady: groups.filter((_, ln) => keep[ln]),
+      boundaryVComs: allBounds.filter((_, ln) => keep[ln]),
+      windowLaps: keep.flatMap((k, ln) => (k ? [ln + 1] : [])),
+    }
+  }
+
+  // Full window: the app-wide cdaRace, no catch exclusions.
+  const fullWin = windowFor(new Set())
+  const cda = cdaRace(fullWin.steady, opts.rho, opts.params, opts.track, fullWin.boundaryVComs)
+
+  // Catch-excluded companion (owner round 8): both numbers are reported side by side —
+  // full = what the race actually cost aerodynamically, excluded = your own aero with the
+  // draft/pass laps removed.
+  let cdaExcl: RideAnalysis['cdaExcl']
+  if (opts.excludeCdaLaps != null && opts.excludeCdaLaps.length > 0) {
+    const exclWin = windowFor(new Set(opts.excludeCdaLaps))
+    if (exclWin.steady.length >= 2 && exclWin.windowLaps.length < fullWin.windowLaps.length) {
+      const r = cdaRace(exclWin.steady, opts.rho, opts.params, opts.track, exclWin.boundaryVComs)
+      cdaExcl = { cdaM2: r.cdaRace, ci95: r.ci95, windowLaps: exclWin.windowLaps }
+    }
+  }
 
   const startMetrics = reconstructStart(timeline, detection, laps, opts.params, opts.rho, cda.cdaRace)
   const reproduction = reproduceTime(timeline, detection, laps, cda.cdaRace, opts)
@@ -105,7 +130,8 @@ export function analyzeRide(content: ArrayBuffer | Uint8Array, opts: AnalyzeOpti
     cdaRaceM2: cda.cdaRace,
     cdaCi95: cda.ci95,
     cdaPerLapM2: cda.perLap,
-    cdaWindowLaps,
+    cdaWindowLaps: fullWin.windowLaps,
+    cdaExcl,
     startMetrics,
     reproduction,
   }

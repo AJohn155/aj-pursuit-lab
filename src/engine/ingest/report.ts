@@ -68,6 +68,15 @@ export interface AnalysisResult {
   /** Total extra wheel distance implied by line heights over laps 3–15, m (see
    * LapConstruction.extraDistanceM). Absent on pre-0.4.0 caches. */
   extraDistanceM?: number
+  /** Catch-excluded CdA companion (owner request 2026-07 round 8): the steady-window
+   * balance with the caught-rider laps removed — "your own aero", shown alongside the
+   * full `cdaRace` on caught rides. Absent when the ride has no catch exclusions or on
+   * pre-0.8.0 caches. */
+  cdaExclCatch?: number
+  /** 95 % CI half-width of `cdaExclCatch`. */
+  cdaExclCatchCi?: number
+  /** The 1-based laps `cdaExclCatch` used (its window description in the UI). */
+  cdaExclCatchLaps?: number[]
 }
 
 export interface AnalyzeFullOptions extends AnalyzeOptions {
@@ -296,6 +305,13 @@ export function analyzeRideFull(content: ArrayBuffer | Uint8Array, opts: Analyze
     avgPowerRecordedW,
     avgPowerExclLap1W,
     extraDistanceM: laps.extraDistanceM,
+    ...(base.cdaExcl
+      ? {
+          cdaExclCatch: base.cdaExcl.cdaM2,
+          cdaExclCatchCi: base.cdaExcl.ci95,
+          cdaExclCatchLaps: base.cdaExcl.windowLaps,
+        }
+      : {}),
   }
 
   return {

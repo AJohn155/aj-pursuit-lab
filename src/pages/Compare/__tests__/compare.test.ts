@@ -96,3 +96,16 @@ describe('official-split anchoring (owner request 2026-07)', () => {
     expect(timeAtDistance(series, 1000)).toBeCloseTo(60, 1)
   })
 })
+
+describe('gapCharts reference picker (owner request 2026-07 round 8)', () => {
+  it('computes gaps against the chosen reference index', () => {
+    const a = { distM: [0, 1000, 2000], elapsedS: [0, 60, 120] }
+    const b = { distM: [0, 1000, 2000], elapsedS: [0, 62, 124] }
+    const refFirst = gapCharts([a, b])
+    const refSecond = gapCharts([a, b], 1)
+    // Against a: b is behind (+); against b: a is ahead (−) and b is flat 0.
+    expect(refFirst[1].gapS[refFirst[1].gapS.length - 1]).toBeCloseTo(4, 6)
+    expect(refSecond[0].gapS[refSecond[0].gapS.length - 1]).toBeCloseTo(-4, 6)
+    expect(Math.max(...refSecond[1].gapS.map(Math.abs))).toBeCloseTo(0, 9)
+  })
+})

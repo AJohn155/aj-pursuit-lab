@@ -16,6 +16,7 @@ import LapSplitChart from './LapSplitChart'
 import PinnedScenarioSelector from './PinnedScenarioSelector'
 import Progression from './Progression'
 import RideSelector from './RideSelector'
+import SameDayPairs from './SameDayPairs'
 import SpeedPositionOverlayChart from './SpeedPositionOverlayChart'
 import WBalOverlayChart from './WBalOverlayChart'
 import { T } from '../../components/EditableText'
@@ -132,6 +133,8 @@ export default function Compare() {
           )}
         </>
       )}
+
+      <SameDayPairs rides={rides} venues={venues} rawSettings={settings} />
 
       <Progression rides={rides} venues={venues} rawSettings={settings} />
     </div>
