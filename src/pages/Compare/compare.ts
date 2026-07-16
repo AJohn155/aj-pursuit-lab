@@ -133,6 +133,76 @@ export function gapCharts(seriesList: DistanceTimeSeries[], refIndex = 0): GapSe
   }))
 }
 
+/** Half-width of the gap-smoothing kernel in grid points (±3 × 20 m = ±60 m). Deliberately
+ * light — round 10's lesson is that heavy smoothing blurs real features (it hid the Worlds
+ * quali catch dip in rolling CdA). */
+const GAP_SMOOTH_HALF_WIDTH_PTS = 3
+
+/**
+ * Lightly smooths gap curves (owner request 2026-07: "so things aren't so jagged") with a
+ * centered triangular kernel, then re-anchors so the curve is EXACT again at every lap
+ * line and at both ends. The 20 m-grid jitter is reconstruction noise (1 Hz interpolation
+ * + within-lap speed oscillation), not real gap evolution — but lap-line gaps on
+ * split-anchored rides are exactly the official gaps, a promise the caption makes and the
+ * owner cross-checks, so the correction (raw − smoothed at each lap line, linearly
+ * interpolated between lines) puts those values back untouched.
+ */
+export function smoothGaps(gaps: GapSeries[], lapLengthM = 250): GapSeries[] {
+  const H = GAP_SMOOTH_HALF_WIDTH_PTS
+  return gaps.map((g) => {
+    const n = g.gapS.length
+    if (n < 2 * H + 1) return g
+    const sm = new Array<number>(n)
+    for (let i = 0; i < n; i++) {
+      let acc = 0
+      let wSum = 0
+      for (let k = -H; k <= H; k++) {
+        const j = i + k
+        if (j < 0 || j >= n) continue
+        const w = H + 1 - Math.abs(k)
+        acc += g.gapS[j] * w
+        wSum += w
+      }
+      sm[i] = acc / wSum
+    }
+    // Correction anchors: both ends plus every lap line strictly inside the range.
+    const raw = { distM: g.distM, elapsedS: g.gapS }
+    const smoothed = { distM: g.distM, elapsedS: sm }
+    const anchorD: number[] = [g.distM[0]]
+    const anchorE: number[] = [g.gapS[0] - sm[0]]
+    const dEnd = g.distM[n - 1]
+    for (let d = Math.ceil(g.distM[0] / lapLengthM) * lapLengthM || lapLengthM; d < dEnd; d += lapLengthM) {
+      anchorD.push(d)
+      anchorE.push(timeAtDistance(raw, d) - timeAtDistance(smoothed, d))
+    }
+    anchorD.push(dEnd)
+    anchorE.push(g.gapS[n - 1] - sm[n - 1])
+    const corr = { distM: anchorD, elapsedS: anchorE }
+    // Lap lines usually fall between 20 m grid points, so exactness there needs the
+    // lap-line points inserted explicitly (with their raw values) — a polyline through
+    // grid points alone would interpolate past them.
+    const outD: number[] = []
+    const outG: number[] = []
+    let nextLine = anchorD.length > 2 ? anchorD[1] : Number.POSITIVE_INFINITY
+    let lineIdx = 1
+    for (let i = 0; i < n; i++) {
+      while (nextLine < g.distM[i]) {
+        outD.push(nextLine)
+        outG.push(timeAtDistance(raw, nextLine))
+        lineIdx++
+        nextLine = lineIdx < anchorD.length - 1 ? anchorD[lineIdx] : Number.POSITIVE_INFINITY
+      }
+      if (nextLine === g.distM[i]) {
+        lineIdx++
+        nextLine = lineIdx < anchorD.length - 1 ? anchorD[lineIdx] : Number.POSITIVE_INFINITY
+      }
+      outD.push(g.distM[i])
+      outG.push(sm[i] + timeAtDistance(corr, g.distM[i]))
+    }
+    return { distM: outD, gapS: outG }
+  })
+}
+
 const SPEED_POS_BINS = 40
 
 /** One ride's average speed-vs-position-in-lap, binned across a steady lap range. */

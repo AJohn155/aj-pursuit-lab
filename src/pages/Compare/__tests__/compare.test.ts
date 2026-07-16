@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildDistanceTimeSeries, gapCharts, speedPositionAverage, timeAtDistance } from '../compare'
+import { buildDistanceTimeSeries, gapCharts, smoothGaps, speedPositionAverage, timeAtDistance } from '../compare'
 import type { DistanceTimeSeries } from '../compare'
 import { linearTrend, rSquared } from '../../Rides/RideDetail/trend'
 
@@ -108,6 +108,45 @@ describe('gapCharts reference picker (owner request 2026-07 round 8)', () => {
     expect(refFirst[1].gapS[refFirst[1].gapS.length - 1]).toBeCloseTo(4, 6)
     expect(refSecond[0].gapS[refSecond[0].gapS.length - 1]).toBeCloseTo(-4, 6)
     expect(Math.max(...refSecond[1].gapS.map(Math.abs))).toBeCloseTo(0, 9)
+  })
+})
+
+describe('smoothGaps (owner request 2026-07: de-jag the gap chart)', () => {
+  // 20 m grid over 4 laps of 250 m, a smooth trend with alternating ±0.2 s sawtooth noise.
+  const distM: number[] = []
+  const gapS: number[] = []
+  for (let d = 0, i = 0; d <= 1000; d += 20, i++) {
+    distM.push(d)
+    gapS.push(d / 500 + (i % 2 === 0 ? 0.2 : -0.2))
+  }
+
+  it('reduces point-to-point jitter', () => {
+    const [sm] = smoothGaps([{ distM, gapS }], 250)
+    const jitter = (ys: number[]) => {
+      let sum = 0
+      for (let i = 1; i < ys.length; i++) sum += Math.abs(ys[i] - ys[i - 1])
+      return sum
+    }
+    expect(jitter(sm.gapS)).toBeLessThan(jitter(gapS) / 3)
+  })
+
+  it('keeps lap-line and endpoint gaps exactly the raw values', () => {
+    const [sm] = smoothGaps([{ distM, gapS }], 250)
+    const raw = { distM, elapsedS: gapS }
+    const out = { distM: sm.distM, elapsedS: sm.gapS }
+    for (const d of [0, 250, 500, 750, 1000]) {
+      expect(timeAtDistance(out, d)).toBeCloseTo(timeAtDistance(raw, d), 9)
+    }
+  })
+
+  it('leaves an all-zero reference curve at zero', () => {
+    const [sm] = smoothGaps([{ distM, gapS: distM.map(() => 0) }], 250)
+    expect(Math.max(...sm.gapS.map(Math.abs))).toBeCloseTo(0, 12)
+  })
+
+  it('returns short series unchanged', () => {
+    const short = { distM: [0, 20, 40], gapS: [0, 1, 0] }
+    expect(smoothGaps([short], 250)[0]).toEqual(short)
   })
 })
 

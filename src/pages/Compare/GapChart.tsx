@@ -9,7 +9,7 @@
 import { useState } from 'react'
 import { equivalentTimeAtRefDensity } from '../../engine/index'
 import Chart from '../../components/Chart'
-import { buildDistanceTimeSeries, gapCharts, type CompareItem } from './compare'
+import { buildDistanceTimeSeries, gapCharts, smoothGaps, type CompareItem } from './compare'
 import { T } from '../../components/EditableText'
 
 export default function GapChart({
@@ -37,7 +37,7 @@ export default function GapChart({
     const k = equivalentTimeAtRefDensity(1, it.rho, referenceAirDensity)
     return { distM: s.distM, elapsedS: s.elapsedS.map((t) => t * k) }
   })
-  const gaps = gapCharts(series, refIndex)
+  const gaps = smoothGaps(gapCharts(series, refIndex), refItem.lapLengthM)
   const anchored = items.filter((it) => (it.officialSplits?.length ?? 0) >= 2).length
   const missingRho = normalizeDensity ? items.filter((it) => it.rho == null).length : 0
 
@@ -74,7 +74,7 @@ export default function GapChart({
         <T
           as="span"
           id="compare.gapchart.caption-base"
-          d="Time behind/ahead of the reference ({ref}) at each point on the track. Negative = ahead."
+          d="Time behind/ahead of the reference ({ref}) at each point on the track. Negative = ahead. Curves are lightly smoothed (±60 m); lap-line and finish gaps are exact."
           vars={{ ref: refItem.label }}
         />
         {normalizeDensity && (
