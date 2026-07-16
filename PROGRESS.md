@@ -578,3 +578,15 @@ Owner corrected the record: the catch he'd described was in the **Worlds quali**
 Owner action noted for his own data: tag the Worlds quali as caught at lap 7.5 (Edit details) so its benchmark CdA uses the catch-excluded companion, and untag the Pan Am if it was tagged.
 
 **Test status:** `npm test` **247/247** (250 − 3 detector tests); `tsc -b`, `npm run lint`, `npm run build` clean. Live-smoke-verified ride detail renders with no banner and no console errors; test data + staged files cleaned.
+
+## 2026-07-15 — Owner feedback round 11: own ride notes replace the auto narrative, peak 5 s power, Progression X/Y axes with fitted equation
+
+**Model:** Claude (Fable 5), via Claude Code CLI
+
+Three owner items. **ENGINE_VERSION 0.8.0 → 0.9.0** (AnalysisResult gains `peak5sPowerW`).
+
+- **Ride notes replace the auto-generated narrative:** the deterministic prose paragraph on the ride summary is gone (owner: he'd rather describe rides himself). In its place, the ride's own `notes` field (same field as Edit details) renders inline — click to open a textarea, blur saves; empty shows an italic prompt. Saving only touches the ride doc (notes never affect analysis), so the cached summary is untouched. Verified persistence across reload.
+- **Peak 5 s power:** best 5-consecutive-sample rolling-mean power over the race window, persisted as `AnalysisResult.peak5sPowerW`. The "Start to 95% cruise" tile split in two: "Peak 5 s power" (with the 1 s peak as its hint) and a plain "Start to 95% cruise". Quali fixture: 1296 W (5 s) vs 1342 W (1 s). Test pins avg < peak5s ≤ peak1s.
+- **Progression X/Y axes + fitted equation:** the chart gains an X selector (Date default — behavior unchanged — or any metric) alongside the Y selector, turning it into a metric-vs-metric scatter (e.g. CdA vs normalized time). A least-squares fit overlays whatever combo is chosen, with a caption equation: date axes get "+N unit per 30 days · R² x.xx" (a per-ms slope means nothing), metric axes get "y = m·x + b · R² x.xx" (new `rSquared` in trend.ts, tested). Outdoor-exclusion and per-ride deselection apply to the fit as before; labels/hover unchanged (hover now always includes the date since x may not show it).
+
+**Test status:** `npm test` **249/249** (peak-5s + rSquared new); `tsc -b`, `npm run lint`, `npm run build` clean. Live-verified: notes round-trip through reload, split power tiles on the quali, X=CdA/Y=normalized-time scatter with axis title + "Fit: y = 2740·x − 209 · R² 1.00" caption (trivially perfect with 2 points), date default intact. Zero console errors; test data + staged files cleaned.

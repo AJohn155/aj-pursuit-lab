@@ -94,6 +94,17 @@ describe('analyzeRideFull (SPEC §4.15)', () => {
     expect(sm.peakPower).toBeGreaterThan(400) // a real sprint-off-the-line peak
   })
 
+  it('peak 5 s power sits between the race average and the 1 s start peak (round 12)', () => {
+    const full = fullFor('SRM_PM9_ANDERS_TP_2025-10-24_13-18-40.fit', 246.793, 1.122)
+    const r = full.analysisResult
+    const p5 = r.peak5sPowerW
+    expect(p5).toBeDefined()
+    // A 5 s rolling mean can never exceed the highest 1 s sample it averages…
+    expect(p5!).toBeLessThanOrEqual(r.startMetrics.peakPower)
+    // …and the best 5 s of a standing-start pursuit dwarfs the race average.
+    expect(p5!).toBeGreaterThan(r.avgPowerRecordedW! * 1.5)
+  })
+
   it('accelDecel and peakSpeedPhaseDeg are present and in range', () => {
     const full = fullFor('SRM_PM9_ANDERS_TP_2025-10-24_13-18-40.fit', 246.793, 1.122)
     expect(full.analysisResult.accelDecel.sAccel).toBeGreaterThan(0)

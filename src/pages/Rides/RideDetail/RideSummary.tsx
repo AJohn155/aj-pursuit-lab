@@ -1,14 +1,17 @@
 // Ride summary (owner request 2026-07 round 5, item 1): the headline numbers — including
-// the ride CdA, which previously never appeared on the detail page — in one card, plus a
-// short auto-written narrative of how the ride unfolded. Everything is derived from the
-// fresh FullRideAnalysis, so it always matches the charts below (never the stale cache).
+// the ride CdA, which previously never appeared on the detail page — in one card, plus the
+// owner's OWN notes about the ride (round 12: the auto-written narrative is gone — he'd
+// rather describe the ride himself; notes edit inline and save on blur). Everything
+// numeric is derived from the fresh FullRideAnalysis, so it always matches the charts
+// below (never the stale cache).
 
+import { useState } from 'react'
 import type { FullRideAnalysis } from '../../../engine/ingest'
+import { dataStore } from '../../../store/DataStore'
 import type { Ride } from '../../../store/types'
 import { T } from '../../../components/EditableText'
 
 const RACE_DISTANCE_M = 4000
-const STEADY_FIRST_LAP = 3
 
 /** "laps 3–15", or "laps 3–15 excl. 7–9" when the window has caught-rider holes. */
 function describeWindow(windowLaps: number[]): string {
@@ -56,9 +59,13 @@ export default function RideSummary({ ride, full }: { ride: Ride; full: FullRide
       value: Number.isFinite(r.avgPowerExclLap1W ?? Number.NaN) ? `${(r.avgPowerExclLap1W as number).toFixed(0)} W` : '—',
     },
     {
+      label: 'Peak 5 s power',
+      value: Number.isFinite(r.peak5sPowerW ?? Number.NaN) ? `${(r.peak5sPowerW as number).toFixed(0)} W` : '—',
+      hint: `1 s peak ${r.startMetrics.peakPower.toFixed(0)} W`,
+    },
+    {
       label: 'Start to 95% cruise',
       value: `${r.startMetrics.timeTo95PctCruise.toFixed(1)} s`,
-      hint: `peak ${r.startMetrics.peakPower.toFixed(0)} W`,
     },
     {
       label: 'Extra distance',
@@ -83,66 +90,55 @@ export default function RideSummary({ ride, full }: { ride: Ride; full: FullRide
           </div>
         ))}
       </div>
-      <p className="mt-3 text-sm leading-relaxed text-slate-600">{narrative(ride, full)}</p>
+      <RideNotes ride={ride} />
       <T as="p" className="mt-1 text-xs text-slate-400" id="rides.ridedetail.summary.convention-note" d="Power conventions: “avg power” averages recorded samples (SRM-style, the app-wide convention); “excl. lap 1” averages from the lap-2 line to the finish. CdA is the single energy balance over laps 3–15 — the app-wide number. On caught rides, “CdA excl. catch” removes the exclusion-range laps (editable in Edit details): the clean estimate of your own aero. Lap 16 is excluded like line height: its end boundary inherits the start-anchor timing error, and an error there lands in the post-line coast-down, which the balance misreads as drag." />
     </section>
   )
 }
 
 /**
- * Deterministic prose from the analysis numbers — a narrative, not a metric dump: the
- * start, where the ride settled, how it faded (or didn't), and where the speed went.
+ * The owner's own description of the ride (round 12, replacing the auto-generated
+ * narrative). Backed by `Ride.notes` — the same field as Edit details — edited inline:
+ * click to open a textarea, blur saves. Saving only touches the ride doc (notes never
+ * affect analysis), so the cached summary is left exactly as it was.
  */
-function narrative(ride: Ride, full: FullRideAnalysis): string {
-  const r = full.analysisResult
-  const laps = r.laps
-  const parts: string[] = []
+function RideNotes({ ride }: { ride: Ride }) {
+  const [editing, setEditing] = useState(false)
 
-  if (laps.length > 0 && Number.isFinite(laps[0].timeS)) {
-    parts.push(
-      `Off the start, lap 1 took ${laps[0].timeS.toFixed(1)} s (peak ${r.startMetrics.peakPower.toFixed(0)} W, at 95% of cruise speed in ${r.startMetrics.timeTo95PctCruise.toFixed(1)} s).`,
+  async function save(value: string) {
+    setEditing(false)
+    const trimmed = value.trim()
+    if (trimmed === ride.notes) return
+    await dataStore.rides.put({ ...ride, notes: trimmed, updatedAt: new Date().toISOString() })
+  }
+
+  if (editing) {
+    return (
+      <textarea
+        autoFocus
+        defaultValue={ride.notes}
+        onBlur={(e) => void save(e.target.value)}
+        rows={4}
+        placeholder="How did this ride go? Conditions, tactics, equipment, how it felt…"
+        className="mt-3 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm leading-relaxed text-slate-700"
+      />
     )
   }
 
-  const steady = laps.slice(STEADY_FIRST_LAP - 1).filter((l) => Number.isFinite(l.timeS))
-  if (steady.length >= 4) {
-    const times = steady.map((l) => l.timeS)
-    const best = Math.min(...times)
-    const worst = Math.max(...times)
-    const bestLap = laps.findIndex((l) => l.timeS === best) + 1
-    const worstLap = laps.findIndex((l) => l.timeS === worst) + 1
-    const firstHalf = times.slice(0, Math.floor(times.length / 2))
-    const secondHalf = times.slice(Math.floor(times.length / 2))
-    const mean = (a: number[]) => a.reduce((s, x) => s + x, 0) / a.length
-    const fadePerLap = mean(secondHalf) - mean(firstHalf)
-    const settleW = r.avgPowerExclLap1W
-    parts.push(
-      `From lap ${STEADY_FIRST_LAP} the ride settled${Number.isFinite(settleW ?? Number.NaN) ? ` around ${(settleW as number).toFixed(0)} W` : ''}, with steady laps between ${best.toFixed(1)} s (lap ${bestLap}) and ${worst.toFixed(1)} s (lap ${worstLap}).`,
-    )
-    if (Math.abs(fadePerLap) < 0.1) {
-      parts.push('Pacing was even — the second half held the first half’s lap times.')
-    } else if (fadePerLap > 0) {
-      parts.push(
-        `The back half faded by ${fadePerLap.toFixed(2)} s per lap versus the front half (${(fadePerLap * secondHalf.length).toFixed(1)} s total).`,
-      )
-    } else {
-      parts.push(`A negative split — the back half was ${Math.abs(fadePerLap).toFixed(2)} s per lap faster.`)
-    }
-  }
-
-  const wEnd = laps.at(-1)?.wPrimeEnd
-  if (wEnd != null && Number.isFinite(wEnd)) {
-    if (wEnd <= 2000) parts.push('W′ was effectively emptied at the line.')
-    else parts.push(`~${(wEnd / 1000).toFixed(1)} kJ of W′ was left at the line.`)
-  }
-
-  const catchNote =
-    r.cdaExclCatch != null && ride.caughtAtLap != null
-      ? `; excluding the laps around the lap-${ride.caughtAtLap} catch (draft + passing line aren't your own aero), it reads ${r.cdaExclCatch.toFixed(4)}`
-      : ''
-  parts.push(
-    `Total CdA ${r.cdaRace.toFixed(4)} ± ${r.ci.toFixed(4)} m²${catchNote}${ride.speedSource === 'cadence' ? ' (speed reconstructed from cadence × gear — treat aero numbers with care)' : ''}.`,
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      title="Click to edit — these are your ride notes (also editable in Edit details)"
+      className="mt-3 block w-full rounded-lg border border-transparent px-0 text-left text-sm leading-relaxed hover:border-slate-200 hover:bg-slate-50 hover:px-3 hover:py-2"
+    >
+      {ride.notes ? (
+        <span className="whitespace-pre-wrap text-slate-600">{ride.notes}</span>
+      ) : (
+        <span className="italic text-slate-400">
+          Add your own notes about this ride — conditions, tactics, how it felt… (click to write)
+        </span>
+      )}
+    </button>
   )
-
-  return parts.join(' ')
 }

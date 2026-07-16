@@ -68,6 +68,10 @@ export interface AnalysisResult {
   /** Total extra wheel distance implied by line heights over laps 3–15, m (see
    * LapConstruction.extraDistanceM). Absent on pre-0.4.0 caches. */
   extraDistanceM?: number
+  /** Best 5-second rolling-mean power anywhere in the race window, W (owner request
+   * 2026-07 round 12) — the standing-start effort in a repeatable form (the 1-s
+   * `startMetrics.peakPower` is noisier). Absent on pre-0.9.0 caches. */
+  peak5sPowerW?: number
   /** Catch-excluded CdA companion (owner request 2026-07 round 8): the steady-window
    * balance with the caught-rider laps removed — "your own aero", shown alongside the
    * full `cdaRace` on caught rides. Absent when the ride has no catch exclusions or on
@@ -259,6 +263,15 @@ export function analyzeRideFull(content: ArrayBuffer | Uint8Array, opts: Analyze
   let firstPowerT = Math.ceil(raceStart)
   while (firstPowerT < raceEnd && interpAt(timeline.t, timeline.p, firstPowerT) < 100) firstPowerT++
   const avgPowerRecordedW = meanOverLap(timeline.p, firstPowerT, raceEnd)
+
+  // Best 5 s rolling-mean power over the race window (owner request 2026-07 round 12):
+  // five consecutive 1 Hz samples, maximised — in practice the standing-start effort.
+  let peak5sPowerW = 0
+  for (let tt = Math.ceil(raceStart); tt + 4 <= raceEnd; tt++) {
+    let sum = 0
+    for (let k = 0; k < 5; k++) sum += interpAt(timeline.t, timeline.p, tt + k)
+    peak5sPowerW = Math.max(peak5sPowerW, sum / 5)
+  }
   const avgPowerExclLap1W = Number.isNaN(laps.lapBoundaryTimes[1])
     ? Number.NaN
     : meanOverLap(timeline.p, laps.lapBoundaryTimes[1], raceEnd)
@@ -309,6 +322,7 @@ export function analyzeRideFull(content: ArrayBuffer | Uint8Array, opts: Analyze
     avgPowerRecordedW,
     avgPowerExclLap1W,
     extraDistanceM: laps.extraDistanceM,
+    peak5sPowerW,
     ...(base.cdaExcl
       ? {
           cdaExclCatch: base.cdaExcl.cdaM2,

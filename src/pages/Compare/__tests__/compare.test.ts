@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildDistanceTimeSeries, gapCharts, speedPositionAverage, timeAtDistance } from '../compare'
 import type { DistanceTimeSeries } from '../compare'
+import { linearTrend, rSquared } from '../../Rides/RideDetail/trend'
 
 describe('timeAtDistance', () => {
   const series: DistanceTimeSeries = { distM: [0, 100, 200, 300], elapsedS: [0, 10, 25, 45] }
@@ -107,5 +108,17 @@ describe('gapCharts reference picker (owner request 2026-07 round 8)', () => {
     expect(refFirst[1].gapS[refFirst[1].gapS.length - 1]).toBeCloseTo(4, 6)
     expect(refSecond[0].gapS[refSecond[0].gapS.length - 1]).toBeCloseTo(-4, 6)
     expect(Math.max(...refSecond[1].gapS.map(Math.abs))).toBeCloseTo(0, 9)
+  })
+})
+
+describe('rSquared (Progression fit overlay, round 12)', () => {
+  it('is 1 for a perfect line, ~0 for pure noise around a flat fit, 0 for constant y', () => {
+    const xs = [1, 2, 3, 4, 5]
+    const perfect = xs.map((x) => 2 * x + 1)
+    expect(rSquared(xs, perfect, linearTrend(xs, perfect))).toBeCloseTo(1, 12)
+    const flatNoise = [1, -1, 1, -1, 1]
+    const fit = linearTrend(xs, flatNoise)
+    expect(rSquared(xs, flatNoise, fit)).toBeLessThan(0.2)
+    expect(rSquared(xs, [3, 3, 3, 3, 3], linearTrend(xs, [3, 3, 3, 3, 3]))).toBe(0)
   })
 })

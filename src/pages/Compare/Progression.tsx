@@ -6,7 +6,7 @@ import { equivalentTimeAtRefDensity } from '../../engine/index'
 import { resolveRideDensity } from '../../store/density'
 import { rideDateTimeKey, withSettingsDefaults, type Ride, type Settings, type Venue } from '../../store/types'
 import Chart from '../../components/Chart'
-import { linearTrend } from '../Rides/RideDetail/trend'
+import { linearTrend, rSquared } from '../Rides/RideDetail/trend'
 import { displayAvgPower, displayPowerExclLap1 } from '../Rides/format'
 import { T } from '../../components/EditableText'
 
@@ -28,6 +28,8 @@ interface Point {
   /** date + start-time sort key (rideDateTimeKey) — orders same-day rides. */
   dateTime: string
   value: number | null
+  /** Numeric x for the fit (ms epoch when x is date, else the chosen metric's value). */
+  xValue: number | null
   outdoor: boolean
   kit: string[]
   eventName: string
@@ -106,12 +108,17 @@ function labelPositions(xs: number[], ys: number[]): string[] {
 
 export default function Progression({ rides, venues, rawSettings }: { rides: Ride[]; venues: Venue[]; rawSettings: Settings }) {
   const [metric, setMetric] = useState<MetricKey>('normalizedTimeS')
+  // X-axis is choosable (owner request 2026-07 round 12): date by default, or any metric —
+  // pick e.g. CdA (x) vs normalized time (y) to see how two factors relate.
+  const [xMetric, setXMetric] = useState<'date' | MetricKey>('date')
   const [includeOutdoor, setIncludeOutdoor] = useState(false)
   const [showLabels, setShowLabels] = useState(true)
   // Rides deselected from the chart+trend (owner request 2026-07 round 5, item 4).
   const [excludedIds, setExcludedIds] = useState<ReadonlySet<string>>(new Set())
 
   const settings = withSettingsDefaults(rawSettings)
+
+  const xIsDate = xMetric === 'date'
 
   const allPoints = useMemo((): Point[] => {
     return rides
@@ -122,45 +129,80 @@ export default function Progression({ rides, venues, rawSettings }: { rides: Rid
           date: ride.date,
           dateTime: rideDateTimeKey(ride),
           value: metricValue(ride, metric, settings.referenceAirDensity, settings, venue),
+          // Numeric x for the trend fit and (when x isn't date) the scatter itself.
+          xValue:
+            xMetric === 'date'
+              ? Date.parse(rideDateTimeKey(ride))
+              : metricValue(ride, xMetric, settings.referenceAirDensity, settings, venue),
           outdoor: venue ? !venue.indoor : false,
           kit: ride.kit,
           eventName: ride.eventName || 'Untitled ride',
         }
       })
-      .filter((p) => p.value != null)
-      .sort((a, b) => a.dateTime.localeCompare(b.dateTime))
-  }, [rides, venues, metric, settings])
+      .filter((p) => p.value != null && p.xValue != null && Number.isFinite(p.xValue))
+      .sort((a, b) => (a.xValue as number) - (b.xValue as number))
+  }, [rides, venues, metric, xMetric, settings])
 
   const points = allPoints.filter((p) => !excludedIds.has(p.ride.id))
   const trendPoints = points.filter((p) => includeOutdoor || !p.outdoor)
   const trend =
     trendPoints.length >= 2
       ? linearTrend(
-          trendPoints.map((p) => Date.parse(p.date)),
+          trendPoints.map((p) => p.xValue as number),
           trendPoints.map((p) => p.value as number),
+        )
+      : null
+  const r2 =
+    trend != null
+      ? rSquared(
+          trendPoints.map((p) => p.xValue as number),
+          trendPoints.map((p) => p.value as number),
+          trend,
         )
       : null
 
   const metricInfo = METRICS.find((m) => m.key === metric)!
+  const xInfo = xIsDate ? null : METRICS.find((m) => m.key === xMetric)!
 
   if (rides.length === 0) return null
+
+  const chartX = (p: Point) => (xIsDate ? p.date : (p.xValue as number))
+  const trendXNum = (p: Point) => p.xValue as number
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
         <T as="h2" className="text-sm font-semibold text-slate-900" id="compare.progression.progression" d="Progression" />
         <div className="flex flex-wrap items-center gap-3 text-sm">
-          <select
-            value={metric}
-            onChange={(e) => setMetric(e.target.value as MetricKey)}
-            className="rounded-md border border-slate-300 px-2 py-1 text-sm"
-          >
-            {METRICS.map((m) => (
-              <option key={m.key} value={m.key}>
-                {m.label}
-              </option>
-            ))}
-          </select>
+          <label className="flex items-center gap-1.5 text-xs text-slate-600">
+            X
+            <select
+              value={xMetric}
+              onChange={(e) => setXMetric(e.target.value as 'date' | MetricKey)}
+              className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+            >
+              <option value="date">Date</option>
+              {METRICS.map((m) => (
+                <option key={m.key} value={m.key}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-slate-600">
+            Y
+            <select
+              value={metric}
+              onChange={(e) => setMetric(e.target.value as MetricKey)}
+              className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+            >
+              {METRICS.map((m) => (
+                <option key={m.key} value={m.key}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="flex items-center gap-1.5 text-xs text-slate-600">
             <input type="checkbox" checked={includeOutdoor} onChange={(e) => setIncludeOutdoor(e.target.checked)} />
             Include outdoor rides in trendline
@@ -197,61 +239,93 @@ export default function Progression({ rides, venues, rawSettings }: { rides: Rid
         </details>
       )}
       {points.length === 0 ? (
-        <p className="text-sm text-slate-500">No rides have this metric yet.</p>
+        <p className="text-sm text-slate-500">No rides have both of these metrics yet.</p>
       ) : (
-        <Chart
-          ariaLabel={`${metricInfo.label} versus date across all rides; hollow markers are outdoor rides`}
-          data={[
-            {
-              type: 'scatter',
-              mode: showLabels ? 'text+markers' : 'markers',
-              x: points.map((p) => p.date),
-              y: points.map((p) => p.value as number),
-              text: showLabels ? points.map((p) => shortLabel(p.eventName)) : undefined,
-              // Plotly accepts a per-point textposition array at runtime; the type only
-              // admits the scalar form, hence the cast.
-              textposition: showLabels
-                ? (labelPositions(
-                    points.map((p) => Date.parse(p.dateTime)),
-                    points.map((p) => p.value as number),
-                  ) as unknown as 'top center')
-                : undefined,
-              textfont: { size: 9, color: '#94a3b8' },
-              hovertext: points.map((p) => `${p.eventName}${p.kit.length ? `<br>Kit: ${p.kit.join(', ')}` : ''}`),
-              hovertemplate: '%{x}<br>%{y}<br>%{hovertext}<extra></extra>',
-              marker: {
-                size: 9,
-                color: points.map((p) => (p.outdoor ? 'rgba(0,0,0,0)' : '#2563eb')),
-                line: { color: '#2563eb', width: 1.5 },
+        <>
+          <Chart
+            ariaLabel={`${metricInfo.label} versus ${xIsDate ? 'date' : xInfo!.label} across all rides; hollow markers are outdoor rides`}
+            data={[
+              {
+                type: 'scatter',
+                mode: showLabels ? 'text+markers' : 'markers',
+                x: points.map(chartX),
+                y: points.map((p) => p.value as number),
+                text: showLabels ? points.map((p) => shortLabel(p.eventName)) : undefined,
+                // Plotly accepts a per-point textposition array at runtime; the type only
+                // admits the scalar form, hence the cast.
+                textposition: showLabels
+                  ? (labelPositions(
+                      points.map(trendXNum),
+                      points.map((p) => p.value as number),
+                    ) as unknown as 'top center')
+                  : undefined,
+                textfont: { size: 9, color: '#94a3b8' },
+                hovertext: points.map(
+                  (p) => `${p.eventName} (${p.date})${p.kit.length ? `<br>Kit: ${p.kit.join(', ')}` : ''}`,
+                ),
+                hovertemplate: '%{x}<br>%{y}<br>%{hovertext}<extra></extra>',
+                marker: {
+                  size: 9,
+                  color: points.map((p) => (p.outdoor ? 'rgba(0,0,0,0)' : '#2563eb')),
+                  line: { color: '#2563eb', width: 1.5 },
+                },
+                name: metricInfo.label,
               },
-              name: metricInfo.label,
-            },
-            ...(trend
-              ? [
-                  {
-                    type: 'scatter' as const,
-                    mode: 'lines' as const,
-                    x: [trendPoints[0].date, trendPoints[trendPoints.length - 1].date],
-                    y: [
-                      trend.intercept + trend.slope * Date.parse(trendPoints[0].date),
-                      trend.intercept + trend.slope * Date.parse(trendPoints[trendPoints.length - 1].date),
-                    ],
-                    line: { color: '#dc2626', dash: 'dash' as const },
-                    name: 'Trend',
-                  },
-                ]
-              : []),
-          ]}
-          layout={{
-            // Same-day rides (e.g. a quali and final) give Plotly's date axis a zero
-            // range to auto-tick, which without an explicit format zooms to sub-second
-            // labels. tickformat keeps it readable regardless of how many rides share a day.
-            xaxis: { title: { text: 'Date' }, type: 'date', tickformat: '%Y-%m-%d' },
-            yaxis: { title: { text: metricInfo.unit } },
-          }}
-          height={340}
-        />
+              ...(trend
+                ? [
+                    {
+                      type: 'scatter' as const,
+                      mode: 'lines' as const,
+                      x: [chartX(trendPoints[0]), chartX(trendPoints[trendPoints.length - 1])],
+                      y: [
+                        trend.intercept + trend.slope * trendXNum(trendPoints[0]),
+                        trend.intercept + trend.slope * trendXNum(trendPoints[trendPoints.length - 1]),
+                      ],
+                      line: { color: '#dc2626', dash: 'dash' as const },
+                      name: 'Fit',
+                    },
+                  ]
+                : []),
+            ]}
+            layout={{
+              // Same-day rides (e.g. a quali and final) give Plotly's date axis a zero
+              // range to auto-tick, which without an explicit format zooms to sub-second
+              // labels. tickformat keeps it readable regardless of how many rides share a day.
+              xaxis: xIsDate
+                ? { title: { text: 'Date' }, type: 'date', tickformat: '%Y-%m-%d' }
+                : { title: { text: `${xInfo!.label} (${xInfo!.unit})` } },
+              yaxis: { title: { text: metricInfo.unit } },
+            }}
+            height={340}
+          />
+          {trend != null && r2 != null && (
+            <p className="mt-1 text-xs text-slate-500">
+              {formatTrendEquation(xIsDate, trend, r2, metricInfo.unit)}
+              {trendPoints.length < points.length && ' (fit excludes outdoor rides)'}
+            </p>
+          )}
+        </>
       )}
     </section>
   )
+}
+
+/**
+ * Human-readable fitted line (owner request 2026-07 round 12). Date axes get a per-30-days
+ * rate (a raw per-millisecond slope means nothing); metric-vs-metric axes get the plain
+ * y = m·x + b. R² says how much of the y-variance the line actually explains.
+ */
+function formatTrendEquation(
+  xIsDate: boolean,
+  trend: { slope: number; intercept: number },
+  r2: number,
+  yUnit: string,
+): string {
+  const fmt = (v: number) =>
+    v === 0 ? '0' : Math.abs(v) >= 1e-3 && Math.abs(v) < 1e5 ? Number(v.toPrecision(3)).toString() : v.toExponential(2)
+  if (xIsDate) {
+    const per30d = trend.slope * 30 * 86_400_000
+    return `Fit: ${per30d >= 0 ? '+' : ''}${fmt(per30d)} ${yUnit} per 30 days · R² ${r2.toFixed(2)}`
+  }
+  return `Fit: y = ${fmt(trend.slope)}·x ${trend.intercept < 0 ? '−' : '+'} ${fmt(Math.abs(trend.intercept))} · R² ${r2.toFixed(2)}`
 }
