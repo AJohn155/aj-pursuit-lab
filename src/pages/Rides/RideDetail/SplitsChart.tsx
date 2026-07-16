@@ -24,6 +24,19 @@ export default function SplitsChart({
   const lapNumbers = values.map((_, i) => i + 1)
   const catchLayout = catchLap != null && Number.isFinite(catchLap) ? catchLineLayout(catchLap) : null
 
+  // Lap 1 includes the standing start, so it sits far above every other lap and, if the y-axis
+  // auto-scales to fit it, squashes laps 2+ into a thin band. Center the axis on laps 2 onward
+  // (owner request 2026-07) for real granularity there; lap 1 can run off the top.
+  const rest = values.slice(1)
+  const yRange = rest.length > 0
+    ? (() => {
+        const lo = Math.min(...rest)
+        const hi = Math.max(...rest)
+        const pad = Math.max((hi - lo) * 0.15, 0.05)
+        return [lo - pad, hi + pad] as [number, number]
+      })()
+    : undefined
+
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
       <T as="h2" className="mb-2 text-sm font-semibold text-slate-900" id="rides.ridedetail.splitschart.lap-splits" d="Lap splits" />
@@ -43,7 +56,7 @@ export default function SplitsChart({
         ]}
         layout={{
           xaxis: { title: { text: 'Lap' }, dtick: 1 },
-          yaxis: { title: { text: 'Split (s)' } },
+          yaxis: { title: { text: 'Split (s)' }, ...(yRange ? { range: yRange } : {}) },
           ...(catchLayout ?? {}),
         }}
         height={260}
