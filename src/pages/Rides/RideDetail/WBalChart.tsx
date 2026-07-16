@@ -2,9 +2,11 @@
 
 import type { WBalPoint } from '../../../engine/ingest'
 import Chart from '../../../components/Chart'
+import { catchLineLayout } from './catchLine'
 import { T } from '../../../components/EditableText'
 
-export default function WBalChart({ curve }: { curve: WBalPoint[] }) {
+export default function WBalChart({ curve, catchTimeS }: { curve: WBalPoint[]; catchTimeS?: number }) {
+  const catchLayout = catchTimeS != null && Number.isFinite(catchTimeS) ? catchLineLayout(catchTimeS) : null
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
       <T as="h2" className="mb-2 text-sm font-semibold text-slate-900" id="rides.ridedetail.wbalchart.w-balance" d="W′ balance" />
@@ -25,7 +27,11 @@ export default function WBalChart({ curve }: { curve: WBalPoint[] }) {
         layout={{
           xaxis: { title: { text: 's' } },
           yaxis: { title: { text: 'kJ' } },
-          shapes: [{ type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 0, y1: 0, line: { color: '#94a3b8', dash: 'dot' } }],
+          shapes: [
+            { type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 0, y1: 0, line: { color: '#94a3b8', dash: 'dot' } },
+            ...(catchLayout?.shapes ?? []),
+          ],
+          ...(catchLayout ? { annotations: catchLayout.annotations } : {}),
         }}
         height={240}
       />

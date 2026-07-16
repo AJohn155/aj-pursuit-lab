@@ -10,6 +10,7 @@
 import type { LapResult } from '../../../engine/ingest'
 import type { RollingCdaPoint } from '../../../engine/index'
 import Chart from '../../../components/Chart'
+import { catchLineLayout } from './catchLine'
 import { linearTrend } from './trend'
 import { T } from '../../../components/EditableText'
 
@@ -84,6 +85,7 @@ export default function CdaCharts({
           layout={{
             xaxis: { title: { text: 'Lap' } },
             yaxis: { title: { text: 'm²' }, range: [lo - pad, hi + pad] },
+            ...(catchLap != null && Number.isFinite(catchLap) ? catchLineLayout(catchLap) : {}),
           }}
           height={260}
         />

@@ -10,7 +10,16 @@ import { linearTrend, rSquared } from '../Rides/RideDetail/trend'
 import { displayAvgPower, displayPowerExclLap1 } from '../Rides/format'
 import { T } from '../../components/EditableText'
 
-type MetricKey = 'timeS' | 'normalizedTimeS' | 'cda' | 'avgW' | 'powerExclLap1' | 'startTimeS' | 'extraDistanceM'
+type MetricKey =
+  | 'timeS'
+  | 'normalizedTimeS'
+  | 'cda'
+  | 'avgW'
+  | 'powerExclLap1'
+  | 'peak5sPowerW'
+  | 'startTimeS'
+  | 'lap1SplitS'
+  | 'extraDistanceM'
 
 const METRICS: { key: MetricKey; label: string; unit: string }[] = [
   { key: 'timeS', label: 'Finish time', unit: 's' },
@@ -18,7 +27,9 @@ const METRICS: { key: MetricKey; label: string; unit: string }[] = [
   { key: 'cda', label: 'CdA', unit: 'm²' },
   { key: 'avgW', label: 'Avg power (recorded)', unit: 'W' },
   { key: 'powerExclLap1', label: 'Power excl. lap 1', unit: 'W' },
+  { key: 'peak5sPowerW', label: 'Peak 5 s power', unit: 'W' },
   { key: 'startTimeS', label: 'Start time (to 95% cruise)', unit: 's' },
+  { key: 'lap1SplitS', label: 'Lap 1 split (official)', unit: 's' },
   { key: 'extraDistanceM', label: 'Extra distance vs 3,250 m datum (laps 3–15)', unit: 'm' },
 ]
 
@@ -55,8 +66,17 @@ function metricValue(
       return ride.analysis ? displayAvgPower(ride.analysis) : (ride.manualAvgPowerW ?? null)
     case 'powerExclLap1':
       return ride.analysis ? displayPowerExclLap1(ride.analysis) : null
+    case 'peak5sPowerW': {
+      const v = ride.analysis?.peak5sPowerW
+      return v != null && Number.isFinite(v) ? v : null
+    }
     case 'startTimeS':
       return ride.analysis?.startMetrics.timeTo95PctCruise ?? null
+    case 'lap1SplitS': {
+      // Official lap-1 split only (owner round 12) — the standing-start split he tracks.
+      const v = ride.officialSplits[0]
+      return v != null && Number.isFinite(v) ? v : null
+    }
     case 'extraDistanceM': {
       // Per-lap line height was dropped (owner round 10) — the telescoping TOTAL over the
       // 3,250 m interior datum is the robust quantity. Meaningless on cadence-derived

@@ -4,6 +4,7 @@
 
 import { useState } from 'react'
 import Chart from '../../../components/Chart'
+import { catchLineLayout } from './catchLine'
 import { T } from '../../../components/EditableText'
 
 export default function Traces({
@@ -12,15 +13,19 @@ export default function Traces({
   p,
   cad,
   t0,
+  catchTimeS,
 }: {
   t: number[]
   v: number[]
   p: number[]
   cad: number[]
   t0: number
+  /** Race-relative time (s) where a rider was caught; undefined = no catch. */
+  catchTimeS?: number
 }) {
   const [show, setShow] = useState({ speed: true, power: true, cadence: true })
   const x = t.map((tt) => tt - t0)
+  const catchLayout = catchTimeS != null && Number.isFinite(catchTimeS) ? catchLineLayout(catchTimeS) : null
 
   const toggle = (key: keyof typeof show) => setShow((s) => ({ ...s, [key]: !s[key] }))
 
@@ -111,6 +116,7 @@ export default function Traces({
             tickfont: { color: '#10b981' },
           },
           margin: { l: 48, r: 8, t: 24, b: 40 },
+          ...(catchLayout ?? {}),
         }}
         height={340}
       />

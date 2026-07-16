@@ -590,3 +590,19 @@ Three owner items. **ENGINE_VERSION 0.8.0 → 0.9.0** (AnalysisResult gains `pea
 - **Progression X/Y axes + fitted equation:** the chart gains an X selector (Date default — behavior unchanged — or any metric) alongside the Y selector, turning it into a metric-vs-metric scatter (e.g. CdA vs normalized time). A least-squares fit overlays whatever combo is chosen, with a caption equation: date axes get "+N unit per 30 days · R² x.xx" (a per-ms slope means nothing), metric axes get "y = m·x + b · R² x.xx" (new `rSquared` in trend.ts, tested). Outdoor-exclusion and per-ride deselection apply to the fit as before; labels/hover unchanged (hover now always includes the date since x may not show it).
 
 **Test status:** `npm test` **249/249** (peak-5s + rSquared new); `tsc -b`, `npm run lint`, `npm run build` clean. Live-verified: notes round-trip through reload, split power tiles on the quali, X=CdA/Y=normalized-time scatter with axis title + "Fit: y = 2740·x − 209 · R² 1.00" caption (trivially perfect with 2 points), date default intact. Zero console errors; test data + staged files cleaned.
+
+## 2026-07-15 — Owner feedback round 12: catch marker on plots, m:ss times, start-lap-split + start-energy in summary, splits scatter, removed speed-vs-position & start box, Progression metrics
+
+**Model:** Claude (Opus 4.8), via Claude Code CLI
+
+Seven owner items on the ride-detail page + Progression. No engine-version bump (peak5sPowerW already landed in 0.9.0 round 11; nothing here changes analysis math).
+
+- **Catch vertical line on the plots** (`caughtAtLap`): new `catchLine.ts` — `catchLineLayout(x)` (amber dotted vertical + "caught rider" label) and `lapPositionToRaceTimeS` (fractional lap → race-relative time via lap boundary times). Drawn on Traces & W′bal (time axis, x≈117 s for a 7.5 catch), Lap-splits & per-lap CdA (lap axis, x=7.5); the rolling-CdA chart keeps its existing shaded band.
+- **Official time as m:ss.mmm:** `formatRaceTime` in Rides/format.ts (246.793 → "4:06.793", sub-minute keeps "0:", negatives handled, non-finite → "—"; tested). Applied to the ride-summary Official-time tile and the rides-list Time + Norm. time columns.
+- **Start lap split tile** (official lap-1 split) added to the ride summary; "—" when no official splits.
+- **Splits scatter** (`SplitsChart`): each lap's split vs lap number (official when present, else detected lap times with a note), so pacing is visible at a glance; carries the catch line. Placed under the lap table.
+- **Removed speed-vs-position plot** from ride detail (`OverlayChart` deleted; engine still computes `overlay`/`geometry` for Compare's own chart).
+- **Removed the mid-page Start box** (`StartPanel` deleted); its three metrics now live in the top summary — start energy is a new tile, time-to-95% stays, peak power is the "1 s peak" hint on Peak-5-s-power.
+- **Progression metrics:** added "Peak 5 s power" (`peak5sPowerW`) and "Lap 1 split (official)" (`officialSplits[0]`) to both the X and Y axis pickers.
+
+**Test status:** `npm test` **252/252** (formatRaceTime ×3 new); `tsc -b`, `npm run lint`, `npm run build` clean. Live-verified on a caught ride with official splits: summary time "4:06.793", start-lap-split 18.500 s, start energy 5.76 kJ (once — no duplicate box), peak-5s 1296 W; catch line at the right x on all four plots + rolling band; splits scatter plots the official values; speed-vs-position gone; rides-list times m:ss; both new Progression metrics in the dropdowns. Zero console errors; test data + staged files cleaned.

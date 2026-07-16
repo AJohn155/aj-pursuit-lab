@@ -8,7 +8,7 @@ import { dataStore } from '../../store/DataStore'
 import { resolveRideDensity } from '../../store/density'
 import { rideDateTimeKey, SETTINGS_ID, withSettingsDefaults, type Ride, type Venue } from '../../store/types'
 import { useCollection } from '../../store/useCollection'
-import { BADGE_CLASSES, displayAvgPower, displayPowerExclLap1, qualityBadgeForScore } from './format'
+import { BADGE_CLASSES, displayAvgPower, displayPowerExclLap1, formatRaceTime, qualityBadgeForScore } from './format'
 
 type SortKey = 'date' | 'timeS' | 'normalizedTimeS' | 'avgW' | 'powerExclLap1' | 'cda' | 'quality'
 
@@ -164,8 +164,8 @@ export default function RidesList() {
                   {ride.date}
                   {ride.startTime && <span className="block text-xs text-slate-400">{ride.startTime}</span>}
                 </td>
-                <td className="px-3 py-2 text-slate-600">{ride.officialTimeS.toFixed(3)}s</td>
-                <td className="px-3 py-2 text-slate-600">{normalizedTimeS.toFixed(3)}s</td>
+                <td className="px-3 py-2 text-slate-600">{formatRaceTime(ride.officialTimeS)}</td>
+                <td className="px-3 py-2 text-slate-600">{formatRaceTime(normalizedTimeS)}</td>
                 <td className="px-3 py-2 text-slate-600">{avgW != null ? `${avgW.toFixed(0)} W` : '—'}</td>
                 <td className="px-3 py-2 text-slate-600">
                   {powerExclLap1 != null ? `${powerExclLap1.toFixed(0)} W` : '—'}

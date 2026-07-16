@@ -21,13 +21,13 @@ import { analyzeStoredRide } from '../../../store/analyzeStoredRide'
 import { resolveRideDensity } from '../../../store/density'
 import { SETTINGS_ID, withSettingsDefaults } from '../../../store/types'
 import { useCollection } from '../../../store/useCollection'
+import { lapPositionToRaceTimeS } from './catchLine'
 import CdaCharts from './CdaCharts'
 import EditRidePanel from './EditRidePanel'
 import LapTable from './LapTable'
-import OverlayChart from './OverlayChart'
 import QualityPanel from './QualityPanel'
 import RideSummary from './RideSummary'
-import StartPanel from './StartPanel'
+import SplitsChart from './SplitsChart'
 import Traces from './Traces'
 import WBalChart from './WBalChart'
 
@@ -95,6 +95,14 @@ export default function RideDetail() {
     ...(ride.speedSource === 'cadence' ? ['speed from cadence × gear (broken speed channel)'] : []),
   ].join(' · ')
 
+  // Where a rider was caught, for the vertical marker on the plots (round 12): lap number
+  // for the lap/split charts, race-relative time for the time-axis charts.
+  const catchLap = ride.flags.caughtRider ? ride.caughtAtLap : undefined
+  const catchTimeS =
+    catchLap != null
+      ? (lapPositionToRaceTimeS(catchLap, full.base.laps.lapBoundaryTimes, full.base.detection.t0) ?? undefined)
+      : undefined
+
   async function handleSaveRecomputed() {
     await dataStore.rides.put({
       ...confirmedRide,
@@ -148,7 +156,14 @@ export default function RideDetail() {
       {editing && <EditRidePanel ride={ride} venues={venues} onDone={() => setEditing(false)} />}
 
       <RideSummary ride={ride} full={full} />
-      <Traces t={full.base.timeline.t} v={full.base.timeline.v} p={full.base.timeline.p} cad={full.base.timeline.cad} t0={full.base.detection.t0} />
+      <Traces
+        t={full.base.timeline.t}
+        v={full.base.timeline.v}
+        p={full.base.timeline.p}
+        cad={full.base.timeline.cad}
+        t0={full.base.detection.t0}
+        catchTimeS={catchTimeS}
+      />
       <LapTable
         laps={full.analysisResult.laps}
         officialSplits={ride.officialSplits}
@@ -156,16 +171,15 @@ export default function RideDetail() {
         windowLaps={full.base.cdaExcl?.windowLaps ?? full.base.cdaWindowLaps}
         speedFromCadence={ride.speedSource === 'cadence'}
       />
+      <SplitsChart officialSplits={ride.officialSplits} laps={full.analysisResult.laps} catchLap={catchLap} />
       <CdaCharts
         laps={full.analysisResult.laps}
         rolling={full.rolling}
         windowLaps={full.base.cdaExcl?.windowLaps ?? full.base.cdaWindowLaps}
-        catchLap={ride.flags.caughtRider ? ride.caughtAtLap : undefined}
+        catchLap={catchLap}
         lapLengthM={venue.lapLengthM}
       />
-      <StartPanel startMetrics={full.analysisResult.startMetrics} />
-      <WBalChart curve={full.wBalCurve} />
-      <OverlayChart overlay={full.overlay} geometry={full.geometry} lapLengthM={venue.lapLengthM} />
+      <WBalChart curve={full.wBalCurve} catchTimeS={catchTimeS} />
       <QualityPanel score={full.quality.score} badge={full.quality.badge} flags={full.quality.flags} />
     </div>
   )

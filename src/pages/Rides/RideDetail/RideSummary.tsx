@@ -9,6 +9,7 @@ import { useState } from 'react'
 import type { FullRideAnalysis } from '../../../engine/ingest'
 import { dataStore } from '../../../store/DataStore'
 import type { Ride } from '../../../store/types'
+import { formatRaceTime } from '../format'
 import { T } from '../../../components/EditableText'
 
 const RACE_DISTANCE_M = 4000
@@ -32,8 +33,14 @@ export default function RideSummary({ ride, full }: { ride: Ride; full: FullRide
   const avgSpeedKmh = (RACE_DISTANCE_M / ride.officialTimeS) * 3.6
   const windowText = describeWindow(full.base.cdaWindowLaps)
 
+  const startSplit = ride.officialSplits[0]
   const stats: { label: string; value: string; hint?: string }[] = [
-    { label: 'Official time', value: `${ride.officialTimeS.toFixed(3)} s` },
+    { label: 'Official time', value: formatRaceTime(ride.officialTimeS) },
+    {
+      label: 'Start lap split',
+      value: startSplit != null && Number.isFinite(startSplit) ? `${startSplit.toFixed(3)} s` : '—',
+      hint: 'official lap 1',
+    },
     { label: 'Avg speed', value: `${avgSpeedKmh.toFixed(2)} km/h` },
     {
       label: `CdA (${windowText})`,
@@ -66,6 +73,10 @@ export default function RideSummary({ ride, full }: { ride: Ride; full: FullRide
     {
       label: 'Start to 95% cruise',
       value: `${r.startMetrics.timeTo95PctCruise.toFixed(1)} s`,
+    },
+    {
+      label: 'Start energy',
+      value: Number.isFinite(r.startMetrics.energyJ) ? `${(r.startMetrics.energyJ / 1000).toFixed(2)} kJ` : '—',
     },
     {
       label: 'Extra distance',

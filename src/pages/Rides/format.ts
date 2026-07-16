@@ -6,6 +6,17 @@ export function formatTimeS(seconds: number): string {
   return `${seconds.toFixed(3)}s`
 }
 
+/** Race time as m:ss.mmm (owner request 2026-07 round 12) — 246.793 → "4:06.793". Sub-minute
+ * times keep the leading "0:" so the format reads consistently (45.1 → "0:45.100"). */
+export function formatRaceTime(seconds: number): string {
+  if (!Number.isFinite(seconds)) return '—'
+  const sign = seconds < 0 ? '-' : ''
+  const abs = Math.abs(seconds)
+  const m = Math.floor(abs / 60)
+  const s = abs - m * 60
+  return `${sign}${m}:${s.toFixed(3).padStart(6, '0')}`
+}
+
 /** Badge color classes matching the §4.16 thresholds (green ≥85, yellow ≥60, red below). */
 export function qualityBadgeForScore(score: number): QualityBadge {
   if (score >= 85) return 'green'
