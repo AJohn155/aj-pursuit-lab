@@ -170,9 +170,6 @@ export interface Ride extends Persisted {
    */
   caughtExcludeFromLap?: number
   caughtExcludeToLap?: number
-  /** True once the owner dismissed the automatic "did you catch a rider?" suggestion for
-   * this ride (round 10) — the banner never re-appears. */
-  catchSuggestionDismissed?: boolean
   result?: string
   fitFileB64?: string
   analysis?: AnalysisResult

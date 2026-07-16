@@ -15,9 +15,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ENGINE_VERSION } from '../../../engine/constants'
-import { defaultCatchExclusionRange, detectCatchSignature } from '../../../engine/ingest'
 import type { FullRideAnalysis } from '../../../engine/ingest'
-import type { Ride } from '../../../store/types'
 import { dataStore } from '../../../store/DataStore'
 import { analyzeStoredRide } from '../../../store/analyzeStoredRide'
 import { resolveRideDensity } from '../../../store/density'
@@ -55,15 +53,6 @@ export default function RideDetail() {
 
   const [saved, setSaved] = useState(false)
   const [editing, setEditing] = useState(false)
-
-  // Catch auto-suggestion (owner request 2026-07 round 10): the rolling-CdA dip-then-surge
-  // signature of catching a rider, offered as a one-click tag when the ride isn't already
-  // flagged. Dismissal persists on the ride.
-  const catchSuggestion = useMemo(() => {
-    if (!ride || !venue || !analysis || 'error' in analysis) return null
-    if (ride.flags.caughtRider || ride.catchSuggestionDismissed) return null
-    return detectCatchSignature(analysis.data.rolling, venue.lapLengthM)
-  }, [ride, venue, analysis])
 
   if (!ride) return <p className="text-sm text-slate-500">Loading ride…</p>
   if (!venue) return <p className="text-sm text-red-700">This ride's venue no longer exists.</p>
@@ -116,34 +105,6 @@ export default function RideDetail() {
     setSaved(true)
   }
 
-  async function applyCatchSuggestion(lap: number) {
-    const def = defaultCatchExclusionRange(lap)
-    const updated: Ride = {
-      ...confirmedRide,
-      flags: { ...confirmedRide.flags, caughtRider: true },
-      caughtAtLap: lap,
-      caughtExcludeFromLap: def?.fromLap,
-      caughtExcludeToLap: def?.toLap,
-      updatedAt: new Date().toISOString(),
-    }
-    // Refresh the cached summary in the same save (like EditRidePanel), so the rides list
-    // shows the catch-excluded CdA immediately.
-    if (updated.fitFileB64 && venue && settings) {
-      const fullNew = analyzeStoredRide(updated, venue, settings)
-      updated.analysis = fullNew.analysisResult
-      updated.analysisVersion = ENGINE_VERSION
-    }
-    await dataStore.rides.put(updated)
-  }
-
-  async function dismissCatchSuggestion() {
-    await dataStore.rides.put({
-      ...confirmedRide,
-      catchSuggestionDismissed: true,
-      updatedAt: new Date().toISOString(),
-    })
-  }
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -185,30 +146,6 @@ export default function RideDetail() {
       </div>
 
       {editing && <EditRidePanel ride={ride} venues={venues} onDone={() => setEditing(false)} />}
-
-      {catchSuggestion && (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          <span>
-            The rolling CdA dips ({catchSuggestion.dipCdaM2.toFixed(4)}) then surges (
-            {catchSuggestion.surgeCdaM2.toFixed(4)}) around lap {catchSuggestion.suggestedLap} — the
-            signature of catching a rider. Tag it?
-          </span>
-          <button
-            type="button"
-            onClick={() => void applyCatchSuggestion(catchSuggestion.suggestedLap)}
-            className="rounded-lg bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700"
-          >
-            Tag catch at lap {catchSuggestion.suggestedLap}
-          </button>
-          <button
-            type="button"
-            onClick={() => void dismissCatchSuggestion()}
-            className="rounded-lg border border-amber-300 px-3 py-1 text-xs font-medium hover:bg-amber-100"
-          >
-            No catch — dismiss
-          </button>
-        </div>
-      )}
 
       <RideSummary ride={ride} full={full} />
       <Traces t={full.base.timeline.t} v={full.base.timeline.v} p={full.base.timeline.p} cad={full.base.timeline.cad} t0={full.base.detection.t0} />

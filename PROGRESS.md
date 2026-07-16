@@ -564,3 +564,17 @@ Six owner picks from the round-9 backlog (video parked). Scope on line height cl
 - **Compare persistence + duplicate guard (#12):** Compare selections persist in localStorage (stale ids skipped harmlessly); uploading byte-identical .fit content errors with the existing ride's name/date instead of silently creating a twin.
 
 **Test status:** `npm test` **250/250** (catch detector ×3 incl. the real Pan Am rolling series; ISA/altitude density ×2); `tsc -b`, `npm run lint`, `npm run build` clean. Live-verified end-to-end on the real broken-speed Pan Am file at a 1,880 m test venue; zero console errors; test data + staged files cleaned.
+
+## 2026-07-14 — Owner correction: catch was in Worlds quali; auto-detector removed
+
+**Model:** Claude (Opus 4.8), via Claude Code CLI
+
+Owner corrected the record: the catch he'd described was in the **Worlds quali** (~lap 7.5), not the Pan Am. Probed both rides' per-lap + rolling CdA against this:
+
+- **Worlds quali per-lap CdA IS a textbook catch:** steady decline into the draft (lap 5 0.160 → lap 6 0.157 → **lap 7 0.151**, the race minimum), then +0.017 jump at lap 8 and stays elevated 0.167–0.178. Clear V at lap 7 = the 7.5 catch.
+- **The round-10 auto-detector missed it (false negative) and had fired on the Pan Am (false positive).** Root cause: it keyed off the *smoothed 2-lap rolling* curve, which blurs the sharp per-lap lap-7 dip into a broad valley (min shifted to ~lap 5.8, preceded by a monotonic decline with no flat baseline to dip below), while the Pan Am's already-broad gentle dip survives smoothing and matches. Deeper problem: a catch and ordinary pacing (warm into position → fatigue) produce near-identical CdA shapes; the curve alone can't distinguish them.
+- **Owner chose to remove auto-detection** (of retune-to-per-lap / neutral-prompt / remove). Deleted `catchDetect.ts` + its test, the `detectCatchSignature` export, the ride-detail suggestion banner + apply/dismiss handlers, and the unused `Ride.catchSuggestionDismissed` field. **Manual caught-rider tagging is untouched** (flag + lap + editable exclusion window + dual CdA) — it's the reliable path. No engine-version bump (analysis math unchanged; the removed code never fed cdaRace).
+
+Owner action noted for his own data: tag the Worlds quali as caught at lap 7.5 (Edit details) so its benchmark CdA uses the catch-excluded companion, and untag the Pan Am if it was tagged.
+
+**Test status:** `npm test` **247/247** (250 − 3 detector tests); `tsc -b`, `npm run lint`, `npm run build` clean. Live-smoke-verified ride detail renders with no banner and no console errors; test data + staged files cleaned.
