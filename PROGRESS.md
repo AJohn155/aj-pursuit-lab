@@ -606,3 +606,14 @@ Seven owner items on the ride-detail page + Progression. No engine-version bump 
 - **Progression metrics:** added "Peak 5 s power" (`peak5sPowerW`) and "Lap 1 split (official)" (`officialSplits[0]`) to both the X and Y axis pickers.
 
 **Test status:** `npm test` **252/252** (formatRaceTime ×3 new); `tsc -b`, `npm run lint`, `npm run build` clean. Live-verified on a caught ride with official splits: summary time "4:06.793", start-lap-split 18.500 s, start energy 5.76 kJ (once — no duplicate box), peak-5s 1296 W; catch line at the right x on all four plots + rolling band; splits scatter plots the official values; speed-vs-position gone; rides-list times m:ss; both new Progression metrics in the dropdowns. Zero console errors; test data + staged files cleaned.
+
+## 2026-07-16 — Owner report: fake first-60 m surge on the winner gap chart
+
+**Model:** Claude (Fable 5), via Claude Code CLI
+
+Owner reported both events' gap-to-winner-by-distance charts showing a huge excursion in the first 60 m despite him and the winner ending lap 1 essentially together. Confirmed as a chart artifact with his real backup data: the winner's curve was piecewise-linear within every lap, so in lap 1 it modeled the winner riding at lap-average speed (~42 km/h) from the gun — against the rider's real reconstructed standing start, that fabricated a ~2.5 s excursion peaking around 60 m and collapsing back to the true (near-zero) gap at the 250 m line.
+
+- **Fix (WinnerGapChart.tsx):** within lap 1, the winner's elapsed-time curve now follows my ride's reconstructed standing-start shape, affinely time-scaled to hit the winner's official lap-1 split exactly at the lap line (both riders launch from the same gate, so my measured launch profile is the honest shape prior). Laps 2–16 stay linear-within-lap, exact at every lap line, as before. Caption updated to say so.
+- **Verified numerically** against the backup: 2025 Worlds quali old gap at 60 m +2.72 s → new −0.06 s (lap-line gap −0.16 s unchanged); 2024 Worlds quali +2.51 s → −0.23 s (lap-line −0.61 s unchanged). All values ≥250 m untouched.
+
+**Test status:** `npm test` **256/256**; `tsc -b`, `npm run lint`, `npm run build` clean. Live-verified in the browser (fixture ride + Charleton's splits): curve holds ~0 through lap 1 and opens from ~600 m as it should. Test data cleaned. (Note: `.claude/launch.json` gained `autoPort` so the preview can start alongside another session's dev server.)

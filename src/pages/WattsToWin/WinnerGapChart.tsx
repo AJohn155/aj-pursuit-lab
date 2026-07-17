@@ -2,8 +2,11 @@
 // splits are entered on the event, plot my elapsed time minus theirs at every point on the
 // track — "where did they take those seconds" instead of just the finish-line total. My
 // side uses the ride's reconstructed (and official-split-anchored, when available)
-// distance-time series; the winner's side is piecewise-linear between their lap lines —
-// exact at every 250 m line, interpolated within laps.
+// distance-time series; the winner's side is exact at every 250 m line and piecewise-linear
+// within laps 2–16. Lap 1 is the exception (owner report 2026-07-16): linear there means
+// lap-average speed from the gun, which against my real standing start fabricated a ~2.5 s
+// excursion over the first 60–150 m — so within lap 1 the winner follows my reconstructed
+// standing-start shape, time-scaled to hit their first split exactly at the lap line.
 
 import Chart from '../../components/Chart'
 import { buildDistanceTimeSeries, timeAtDistance } from '../Compare/compare'
@@ -41,11 +44,16 @@ export default function WinnerGapChart({ model, event }: { model: RideModel; eve
       distM: cum.map((_, k) => k * L),
       elapsedS: cum,
     }
+    const myLap1S = timeAtDistance(mySeries, L)
+    const winnerTimeAt = (d: number) =>
+      d < L && myLap1S > 0
+        ? timeAtDistance(mySeries, d) * (cum[1] / myLap1S)
+        : timeAtDistance(winnerSeries, d)
     return {
       type: 'scatter' as const,
       mode: 'lines' as const,
       x: grid,
-      y: grid.map((d) => timeAtDistance(mySeries, d) - timeAtDistance(winnerSeries, d)),
+      y: grid.map((d) => timeAtDistance(mySeries, d) - winnerTimeAt(d)),
       name: `${w.name} (${w.round}, ${w.timeS.toFixed(3)}s)`,
       line: { color: WINNER_COLORS[i % WINNER_COLORS.length] },
     }
@@ -75,7 +83,7 @@ export default function WinnerGapChart({ model, event }: { model: RideModel; eve
         as="p"
         className="mt-1 text-xs text-slate-400"
         id="wattstowin.winnergapchart.caption"
-        d="My time minus the winner's at each point (positive = behind). The winner's curve is exact at every lap line and linear within laps; my curve comes from the ride's reconstructed timeline{anchored}."
+        d="My time minus the winner's at each point (positive = behind). The winner's curve is exact at every lap line, linear within laps 2–16, and follows my standing-start shape (scaled to their lap 1 split) inside lap 1; my curve comes from the ride's reconstructed timeline{anchored}."
         vars={{
           anchored:
             model.ride.officialSplits.length > 0

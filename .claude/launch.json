@@ -5,7 +5,8 @@
       "name": "dev",
       "runtimeExecutable": "/Users/acjohn/.local/node/bin/node",
       "runtimeArgs": ["/Users/acjohn/Desktop/aj-pursuit-lab/node_modules/vite/bin/vite.js"],
-      "port": 5173
+      "port": 5173,
+      "autoPort": true
     }
   ]
 }
