@@ -57,6 +57,27 @@ describe('assessSpeedChannel', () => {
     const noCad = healthyRecords().map((r) => ({ ...r, cadenceRpm: undefined }))
     expect(assessSpeedChannel(noCad).broken).toBe(false)
   })
+
+  // Owner file 2023-07-05 (SRM with no speed sensor paired): speed and distance are 0.00 on
+  // every record while cadence peaks at 111 rpm. The ratio test alone can't see this — its
+  // speed gate filters every record out — so this used to report "not broken", skip the
+  // reconstruction offer, and crash the upload screen downstream.
+  it('flags a dead speed channel (all-zero speed, healthy cadence)', () => {
+    const dead = healthyRecords().map((r) => ({ ...r, speedMs: 0, distanceM: 0 }))
+    const a = assessSpeedChannel(dead)
+    expect(a.broken).toBe(true)
+    expect(a.issue).toBe('dead')
+    expect(a.ratioSpread).toBe(0)
+  })
+
+  it('does not call a file dead when neither speed nor cadence is present', () => {
+    const blank = healthyRecords().map((r) => ({ ...r, speedMs: 0, distanceM: 0, cadenceRpm: 0 }))
+    expect(assessSpeedChannel(blank).broken).toBe(false)
+  })
+
+  it('labels an aliased channel as unstable-ratio, not dead', () => {
+    expect(assessSpeedChannel(brokenRecords()).issue).toBe('unstable-ratio')
+  })
 })
 
 describe('reconstructSpeedFromCadence', () => {

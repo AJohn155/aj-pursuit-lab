@@ -89,6 +89,18 @@ export function detectRace(tl: Timeline, officialTimeS?: number): Detection {
   // First moving sample at/after the anchor.
   let firstMotionIdx = anchor
   while (firstMotionIdx < n && v[firstMotionIdx] < 1) firstMotionIdx++
+  // No moving sample at all (a dead speed channel — see speedFallback's 'dead' issue). Every
+  // value derived below indexes past the end: t0/detectedDurationS become NaN and
+  // startVComMs undefined, while missingStart stays false because the backward walk above
+  // never saw v ≥ 1 either. That combination used to escape as a well-typed Detection whose
+  // fields were lies, and blew up in the caller's render. Fail here, like the no-power-window
+  // case above, so the UI shows a message instead.
+  if (firstMotionIdx >= n) {
+    throw new Error(
+      'detectRace: the speed channel never shows motion — no start can be found. If this file ' +
+        'has cadence, reconstruct speed from cadence × gear instead.',
+    )
+  }
 
   // Refine t0 by extrapolating the first 5 moving samples to v = 0, clamped.
   const extrap = extrapolateStart(v, firstMotionIdx)

@@ -9,13 +9,24 @@
 
 import type { FitRecord } from './types'
 
+/**
+ * How the speed channel is broken — the two cases need different wording, and 'dead' has
+ * no meaningful ratio spread to quote.
+ *  - `dead`: the channel never reports motion at all (no speed sensor paired), while
+ *    cadence shows the rider clearly pedalling.
+ *  - `unstable-ratio`: speed is present but disagrees with cadence sample-to-sample.
+ */
+export type SpeedChannelIssue = 'dead' | 'unstable-ratio'
+
 export interface SpeedChannelAssessment {
   /** True when the speed channel is inconsistent with cadence and should not be trusted. */
   broken: boolean
+  /** Which failure was detected; absent when the channel looks healthy. */
+  issue?: SpeedChannelIssue
   /**
    * Robust spread (IQR ÷ median) of the per-record speed/cadence ratio. On a fixed gear
    * that ratio is a constant (development ÷ 60), so healthy files sit ≈0.01–0.03; the
-   * broken PM9 file is ≈0.3.
+   * broken PM9 file is ≈0.3. Zero for a dead channel — there is no ratio to take.
    */
   ratioSpread: number
   /** Records that qualified for the ratio (moving, pedalling). */
@@ -36,6 +47,17 @@ const SPREAD_THRESHOLD = 0.1
  * broken one.
  */
 export function assessSpeedChannel(records: FitRecord[]): SpeedChannelAssessment {
+  // A dead channel first (owner file 2023-07-05: an SRM with no speed sensor paired —
+  // speed and distance are 0.00 on every record while cadence peaks at 111 rpm). The ratio
+  // test below can't see this: its own speed gate filters every record out, leaving zero
+  // samples, which used to read as "not broken" and silently skipped the offer to
+  // reconstruct — the most broken a channel can be, reported as healthy.
+  const pedalling = records.filter((r) => (r.cadenceRpm ?? 0) >= MIN_CADENCE_RPM)
+  const moving = records.filter((r) => r.speedMs >= MIN_SPEED_MS)
+  if (pedalling.length >= MIN_SAMPLES && moving.length === 0) {
+    return { broken: true, issue: 'dead', ratioSpread: 0, sampleCount: 0 }
+  }
+
   const ratios = records
     .filter((r) => (r.cadenceRpm ?? 0) >= MIN_CADENCE_RPM && r.speedMs >= MIN_SPEED_MS)
     .map((r) => r.speedMs / (r.cadenceRpm as number))
@@ -44,7 +66,8 @@ export function assessSpeedChannel(records: FitRecord[]): SpeedChannelAssessment
   const q = (f: number) => ratios[Math.round(f * (ratios.length - 1))]
   const median = q(0.5)
   const ratioSpread = median > 0 ? (q(0.75) - q(0.25)) / median : 0
-  return { broken: ratioSpread > SPREAD_THRESHOLD, ratioSpread, sampleCount: ratios.length }
+  const broken = ratioSpread > SPREAD_THRESHOLD
+  return { broken, issue: broken ? 'unstable-ratio' : undefined, ratioSpread, sampleCount: ratios.length }
 }
 
 /** Distance covered per crank revolution, m: wheel rollout × gear ratio. */

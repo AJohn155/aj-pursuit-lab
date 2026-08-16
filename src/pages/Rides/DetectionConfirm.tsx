@@ -19,7 +19,7 @@ import {
   parseFitRecords,
   reconstructSpeedFromCadence,
 } from '../../engine/ingest'
-import type { Detection, FitRecord, Timeline } from '../../engine/ingest'
+import type { Detection, FitRecord, SpeedChannelIssue, Timeline } from '../../engine/ingest'
 import { dataStore } from '../../store/DataStore'
 import { SETTINGS_ID, withSettingsDefaults } from '../../store/types'
 import { useCollection } from '../../store/useCollection'
@@ -27,6 +27,7 @@ import { useCollection } from '../../store/useCollection'
 interface Loaded {
   records: FitRecord[]
   speedBroken: boolean
+  speedIssue?: SpeedChannelIssue
   ratioSpread: number
   fileName: string
   fitBytes: Uint8Array
@@ -89,6 +90,7 @@ export default function DetectionConfirm({ onConfirm }: { onConfirm: (result: De
       const next: Loaded = {
         records,
         speedBroken: assessment.broken,
+        speedIssue: assessment.issue,
         ratioSpread: assessment.ratioSpread,
         fileName: file.name,
         fitBytes,
@@ -151,12 +153,21 @@ export default function DetectionConfirm({ onConfirm }: { onConfirm: (result: De
 
       {loaded && loaded.speedBroken && (
         <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          <p>
-            <span className="font-semibold">This file's speed channel looks broken</span> — speed
-            disagrees with cadence sample-to-sample (spread {(loaded.ratioSpread * 100).toFixed(0)}%
-            where a fixed gear should be constant), so speed and distance can't be trusted. Power and
-            cadence look fine.
-          </p>
+          {loaded.speedIssue === 'dead' ? (
+            <p>
+              <span className="font-semibold">This file has no speed data at all</span> — speed and
+              distance read zero on every record (no speed sensor was paired), while cadence shows
+              you clearly pedalling. Reconstructing from cadence is the only way to read this ride.
+              Power and cadence look fine.
+            </p>
+          ) : (
+            <p>
+              <span className="font-semibold">This file's speed channel looks broken</span> — speed
+              disagrees with cadence sample-to-sample (spread {(loaded.ratioSpread * 100).toFixed(0)}%
+              where a fixed gear should be constant), so speed and distance can't be trusted. Power and
+              cadence look fine.
+            </p>
+          )}
           <label className="flex items-center gap-2 font-medium">
             <input
               type="checkbox"

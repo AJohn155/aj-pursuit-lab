@@ -72,6 +72,25 @@ describe('timeline gap handling (SPEC §4.4)', () => {
   })
 })
 
+describe('detectRace on a dead speed channel (owner file 2023-07-05)', () => {
+  // 300 s of race-level power with speed pinned at 0 (no speed sensor paired). The
+  // high-power window is found, but no sample ever moves, so the forward walk for the first
+  // moving sample runs off the end of the arrays. Every field derived from that index was
+  // then a lie — t0 and detectedDurationS NaN, startVComMs undefined — while missingStart
+  // stayed false, because the backward walk never saw v ≥ 1 either. The caller rendered
+  // `startVComMs.toFixed(1)` on that branch and took the whole app down with a blank page.
+  const deadSpeed = Array.from({ length: 400 }, (_, t) => rec(t, 0, t >= 20 && t < 320 ? 500 : 50, 0))
+
+  it('throws instead of returning a Detection whose fields are NaN/undefined', () => {
+    expect(() => detectRace(buildTimeline(deadSpeed))).toThrow(/never shows motion/)
+  })
+
+  it('still detects normally once speed is present', () => {
+    const alive = deadSpeed.map((r, t) => ({ ...r, speedMs: t >= 20 && t < 320 ? 15 : 0, distanceM: r.powerW > 100 ? (t - 20) * 15 : 0 }))
+    expect(() => detectRace(buildTimeline(alive))).not.toThrow()
+  })
+})
+
 describe('start reconstruction on fixtures (SPEC §4.6)', () => {
   const analyze = (file: string, officialTimeS: number, rho: number) =>
     analyzeRide(fs.readFileSync(`${fixturesDir}${file}`), { officialTimeS, rho, params, track })
