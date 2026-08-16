@@ -617,3 +617,19 @@ Owner reported both events' gap-to-winner-by-distance charts showing a huge excu
 - **Verified numerically** against the backup: 2025 Worlds quali old gap at 60 m +2.72 s → new −0.06 s (lap-line gap −0.16 s unchanged); 2024 Worlds quali +2.51 s → −0.23 s (lap-line −0.61 s unchanged). All values ≥250 m untouched.
 
 **Test status:** `npm test` **256/256**; `tsc -b`, `npm run lint`, `npm run build` clean. Live-verified in the browser (fixture ride + Charleton's splits): curve holds ~0 through lap 1 and opens from ~600 m as it should. Test data cleaned. (Note: `.claude/launch.json` gained `autoPort` so the preview can start alongside another session's dev server.)
+
+## 2026-08-16 — Owner report: page goes blank when uploading a new ride
+
+**Model:** Claude (Opus 5), via Claude Code CLI
+
+Owner reported that picking or dropping a .fit file on the upload box blanks the whole page. Root cause of the *blankness* found and fixed; the underlying crash is not yet reproduced.
+
+- **The app had no error boundary anywhere** (`grep` for `componentDidCatch`/`getDerivedStateFromError`: zero hits). Any throw during render therefore unmounted the entire React tree, leaving a white page with no message and nothing to report — exactly the reported symptom, whatever threw.
+- **New `components/ErrorBoundary.tsx`:** renders the error name/message, an expandable stack + component stack, and a "Copy error detail" button. Wrapped around the route `<Outlet/>` in `TabShell` (keyed on `pathname`, so navigating away clears it and the tab nav stays usable) and around the whole app in `main.tsx` as a backstop.
+- **Startup can no longer blank the page either:** `main.tsx` had a top-level `await ensureSeeded()`. An IndexedDB failure there (upgrade blocked by a second open tab, private-browsing storage denial) rejected *before* `render()` was ever reached, so nothing mounted at all. It is now caught and surfaced through the same boundary via a new optional `error` prop.
+
+**Ruled out while hunting the actual crash**, against the owner's real backup (7 rides) and both repo fixtures: full upload flow (drop → detect → metadata → save → ride detail) works end-to-end on both an empty DB and one with an existing ride; `parseFitRecords` → `assessSpeedChannel` → `buildTimeline` → `detectRace` runs clean on all 7 stored files, including the 81 KB 2022 Worlds file uploaded the same day (441 records, timeline 378 s); his `settings` has a well-formed `gearInventory`; `SpeedTrace`'s `Math.max(...v)` spread needs ~125 k samples (~35 h of data) to blow the stack in this browser, so it is not the trigger; `bytesToBase64` is already chunked and the 700 KB size guard is a clean error path; every path in `handleFile` is inside its try/catch, so the throw must be render-phase (or a hang inside `fit-file-parser`, which no boundary can catch).
+
+**Still open:** the specific .fit file that fails has not been shared, so the crash itself is unreproduced. With this change the failure now shows a copyable error instead of a blank page.
+
+**Test status:** `npm test` **256/256**; `tsc -b`, `npm run lint`, `npm run build` clean. Live-verified by temporarily throwing in `DetectionConfirm` on file select: the boundary caught it, the tab nav stayed usable, and the error panel rendered with the full component stack (probe reverted, staged fixtures + backup removed).

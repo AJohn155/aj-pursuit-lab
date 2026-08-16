@@ -1,6 +1,7 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import ajMark from '../assets/aj-mark.png'
 import { TextEditProvider } from './EditableText'
+import ErrorBoundary from './ErrorBoundary'
 import { useTextEdit } from './textEditContext'
 
 const TABS = [
@@ -67,6 +68,9 @@ function EditTextToggle({ className = '' }: { className?: string }) {
 }
 
 export default function TabShell() {
+  // Keyed on the pathname so a crashed page clears itself when the owner navigates away —
+  // the tab nav lives outside the boundary and stays usable either way.
+  const { pathname } = useLocation()
   return (
     <TextEditProvider>
       <div className="flex min-h-svh flex-col md:flex-row">
@@ -93,7 +97,9 @@ export default function TabShell() {
           <div className="mb-2 flex justify-end md:hidden">
             <EditTextToggle />
           </div>
-          <Outlet />
+          <ErrorBoundary resetKey={pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
 
         <nav className="fixed inset-x-0 bottom-0 flex overflow-x-auto border-t border-slate-200/80 bg-white/90 backdrop-blur md:hidden">
