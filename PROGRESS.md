@@ -638,3 +638,16 @@ Owner reported that picking or dropping a .fit file on the upload box blanks the
 **Result:** the file uploads and analyses end-to-end — reconstructed peak 16.33 m/s, 4415 m, official 4:23.041, avg 54.74 km/h, CdA 0.2051 m² ± 0.0025. Note the reconstruction scales with rollout × ring/cog, so check the gear on the confirm screen before saving.
 
 **Test status:** `npm test` **261/261** (5 new: dead-channel flagged, blank-file not misread as dead, aliased channel labelled `unstable-ratio`, `detectRace` throws on a dead channel and still detects normally with speed present); `tsc -b`, `npm run lint`, `npm run build` clean. Live-verified on the owner's real failing file: the amber panel shows the no-speed-data wording, reconstruction is pre-checked, the trace and handles render, and Save & analyze lands on a ride detail page with sane physics. Also verified the boundary itself by temporarily throwing in `DetectionConfirm` (probe reverted; staged fixtures + backup copy removed).
+
+## 2026-08-16 — Owner report: still blank when *dragging* a .fit in
+
+**Model:** Claude (Opus 5), via Claude Code CLI
+
+After the dead-speed-channel fix shipped, the owner reported the page still blanking when he **drags** a file in (the file-picker path was fixed and verified). A second, unrelated cause: **a file dropped outside a drop zone navigates the browser to that file.**
+
+- Only two drop handlers existed in the app (`DetectionConfirm`, `CsvImport`), both on their own `<label>`. Nothing cancelled `dragover`/`drop` anywhere else, so a drop that misses the box by a few pixels triggers the browser default — navigate to the dropped file. Chrome then renders the unrecognised binary .fit as a blank page, replacing the entire app. No error boundary can catch this: no app code runs at all.
+- **New `useFileDropGuard`** (mounted once in `TabShell`): window-level `dragover`/`drop` listeners that `preventDefault()` when the drag carries files. Bubble phase, so a zone's own handler has already taken the file before this runs. Only file drags are swallowed — text/link drags are untouched.
+
+Verified both directions in the browser: a synthetic file drop on the page heading now reports `defaultPrevented: true` for both events (previously it would have navigated), while dropping on the upload box still parses normally — the no-speed-data panel and the trace render as expected. Also confirmed the deployed Pages bundle carries the earlier fixes (`no speed data at all`, `This screen hit an error`, `never shows motion` all present in `index-BDj_7TNB.js`).
+
+**Test status:** `npm test` **261/261**; `tsc -b`, `npm run lint`, `npm run build` clean. Staged file removed.

@@ -2,6 +2,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import ajMark from '../assets/aj-mark.png'
 import { TextEditProvider } from './EditableText'
 import ErrorBoundary from './ErrorBoundary'
+import { useFileDropGuard } from './useFileDropGuard'
 import { useTextEdit } from './textEditContext'
 
 const TABS = [
@@ -71,6 +72,9 @@ export default function TabShell() {
   // Keyed on the pathname so a crashed page clears itself when the owner navigates away —
   // the tab nav lives outside the boundary and stays usable either way.
   const { pathname } = useLocation()
+  // A .fit dropped just outside the upload box used to navigate the browser away from the
+  // app, blanking the page (owner report 2026-08-16).
+  useFileDropGuard()
   return (
     <TextEditProvider>
       <div className="flex min-h-svh flex-col md:flex-row">
