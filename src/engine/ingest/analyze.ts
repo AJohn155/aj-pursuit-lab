@@ -5,7 +5,7 @@ import { simulate } from '../simulate'
 import type { RiderParams, TrackModel } from '../types'
 import { detectRace } from './detect'
 import { parseFitRecords } from './fit'
-import { constructLaps, lapBoundaryVComs, lapSampleGroups } from './laps'
+import { constructLaps, lapBoundaryVComs, lapSampleGroups, lapsForTrack } from './laps'
 import { developmentM, reconstructSpeedFromCadence } from './speedFallback'
 import { reconstructStart } from './start'
 import { buildTimeline } from './timeline'
@@ -71,7 +71,10 @@ export interface RideAnalysis {
  * sim-reproduction argument; that repro shares the same t0 anchor, so it couldn't
  * arbitrate — see PROGRESS 2026-07-13/14. */
 const STEADY_FIRST_LAP = 3
-const STEADY_LAST_LAP = 15
+/** Last steady lap = the one before the finish lap: 15 of 16 at 250 m, 11 of 12 at 333.33 m
+ * (owner choice 2026-08-16 — the direct analogue of the 3–15 convention above, not a
+ * hardcoded 15, which on a 12-lap race would clamp to 3–12 and readmit the finish lap). */
+const steadyLastLap = (nLaps: number) => nLaps - 1
 const MIN_VALID_POWER_W = 100
 const RACE_DISTANCE_M = 4000
 
@@ -84,7 +87,7 @@ export function analyzeRide(content: ArrayBuffer | Uint8Array, opts: AnalyzeOpti
   }
   const timeline = buildTimeline(records)
   const detection = detectRace(timeline, opts.officialTimeS)
-  const laps = constructLaps(timeline, detection, opts.officialTimeS, opts.officialSplits)
+  const laps = constructLaps(timeline, detection, opts.officialTimeS, opts.track, opts.officialSplits)
 
   const groups = lapSampleGroups(timeline, laps, opts.track)
   // Exact COM speeds at each lap's true boundary times, for the ΔKE terms — the first/last
@@ -92,6 +95,7 @@ export function analyzeRide(content: ArrayBuffer | Uint8Array, opts: AnalyzeOpti
   // every lap, which biased every per-lap CdA high (2026-07 round 5 item 1). Kept aligned
   // with the groups by filtering both on the same predicate.
   const allBounds = lapBoundaryVComs(timeline, laps)
+  const STEADY_LAST_LAP = steadyLastLap(lapsForTrack(opts.track.lapLengthM))
   const windowFor = (excludedLaps: Set<number>) => {
     const keep = groups.map(
       (g, ln) =>

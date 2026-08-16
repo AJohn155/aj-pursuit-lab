@@ -1,5 +1,6 @@
 // Lap table (SPEC §5.1): split, official split, Δ vs official, CdA, W — plus the TOTAL
-// extra distance vs the 3,250 m interior datum (laps 3–15). Per-lap line height was
+// extra distance vs the interior datum, which follows the venue (13×250 m on a 250 m track,
+// 9×333.33 m on the 333 m one). Per-lap line height was
 // removed on owner request (2026-07 round 10 — the per-lap values never behaved as
 // expected; boundary noise dominates them, and on cadence-reconstructed rides they only
 // measured the gear guess). The total telescopes over the interior boundaries, so it's
@@ -15,8 +16,12 @@ export default function LapTable({
   construction,
   windowLaps,
   speedFromCadence = false,
+  lapLengthM,
 }: {
   laps: LapResult[]
+  /** Venue lap length, m — the interior datum below scales with it (250 m → 3,250 m over
+   * laps 3–15; 333.33 m → ~3,000 m over laps 3–11). */
+  lapLengthM: number
   officialSplits: number[]
   construction: LapConstruction
   /** 1-based laps in the headline CdA window (minus catch exclusions) — rows outside it
@@ -28,6 +33,13 @@ export default function LapTable({
 }) {
   const rawExtraM = construction.extraDistanceM
   const totalExtraM = Math.max(0, rawExtraM)
+  // The interior datum is however many laps actually carry a line height, times the venue's
+  // lap length — 13×250 m on a 250 m track, 9×333.33 m on the 333 m one.
+  const lineHeightCount = construction.lineHeightsM.filter((h) => Number.isFinite(h)).length
+  const lineHeightFirst = construction.lineHeightsM.findIndex((h) => Number.isFinite(h)) + 1
+  const lineHeightLast = lineHeightFirst + lineHeightCount - 1
+  const datumM = lineHeightCount * lapLengthM
+  const datumFmt = datumM.toLocaleString(undefined, { maximumFractionDigits: 0 })
   const inWindow = new Set(windowLaps)
   const hasOfficial = officialSplits.length > 0
 
@@ -81,15 +93,16 @@ export default function LapTable({
           as="p"
           className="text-xs text-slate-400"
           id="rides.ridedetail.laptable.extra-distance-cadence"
-          d="Extra distance vs. the 3,250 m datum isn't reported for this ride — speed and distance are reconstructed from cadence × gear, so the wheel-distance signal it needs doesn't exist here."
+          d="Extra distance vs. the {datum} m datum isn't reported for this ride — speed and distance are reconstructed from cadence × gear, so the wheel-distance signal it needs doesn't exist here."
+          vars={{ datum: datumFmt }}
         />
       ) : (
         <p className="text-xs text-slate-600">
           <T
             as="span"
             id="rides.ridedetail.laptable.total-extra-distance"
-            d="Extra distance ridden vs. the 3,250 m datum (laps 3–15): {total} m."
-            vars={{ total: totalExtraM.toFixed(1) }}
+            d="Extra distance ridden vs. the {datum} m datum (laps {from}–{to}): {total} m."
+            vars={{ total: totalExtraM.toFixed(1), datum: datumFmt, from: String(lineHeightFirst), to: String(lineHeightLast) }}
           />
           {rawExtraM < 0 && (
             <>
@@ -106,7 +119,8 @@ export default function LapTable({
           <T
             as="span"
             id="rides.ridedetail.laptable.laps-excluded-note"
-            d="Laps 1–2 and lap 16 are excluded — their boundaries carry too much start/finish uncertainty."
+            d="Laps 1–2 and lap {lastLap} are excluded — their boundaries carry too much start/finish uncertainty."
+            vars={{ lastLap: String(laps.length) }}
           />
         </p>
       )}

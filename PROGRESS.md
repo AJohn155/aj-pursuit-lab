@@ -651,3 +651,21 @@ After the dead-speed-channel fix shipped, the owner reported the page still blan
 Verified both directions in the browser: a synthetic file drop on the page heading now reports `defaultPrevented: true` for both events (previously it would have navigated), while dropping on the upload box still parses normally — the no-speed-data panel and the trace render as expected. Also confirmed the deployed Pages bundle carries the earlier fixes (`no speed data at all`, `This screen hit an error`, `never shows motion` all present in `index-BDj_7TNB.js`).
 
 **Test status:** `npm test` **261/261**; `tsc -b`, `npm run lint`, `npm run build` clean. Staged file removed.
+
+## 2026-08-16 — Owner report: 333 m race analysed as 16 laps instead of 12
+
+**Model:** Claude (Opus 5), via Claude Code CLI
+
+Owner's 2025-08-21 Colorado Springs race (333.33 m outdoor track, 4 km = 12 laps) came back with 16 laps. His venue was stored correctly at 333.33 m and `expectedLapCount` (`Math.round(4000 / track.lapLengthM)`) computed 12 — but the lap engine never read the venue.
+
+- **Root cause:** `laps.ts` hardcoded `LAP_M = 250`, `N_LAPS = 16`, `INTERIOR_LAPS = 14`, plus fixed boundary indices (`lapBoundaryTimes[15]`, line-height laps 3–15) and `analyze.ts` hardcoded `STEADY_LAST_LAP = 15`. So the 4 km was carved into 16 fake 250 m laps while the quality flag — the one place that did read the venue — correctly complained. The two halves of the code disagreed.
+- **Fix:** a `lapPlan(track)` derives lap length, lap count, interior count and the line-height window from the venue; `constructLaps`/`constructHalfLaps` take the track, and everything else derives the count from `lapBoundaryTimes.length - 1`. The steady CdA window is now `3 … nLaps − 1` rather than a literal 15 — on a 12-lap race the old constant would have clamped to 3–12 and readmitted the finish lap.
+- **Window convention (owner choice, asked not invented):** laps **3–11** on a 12-lap track — the direct analogue of the 3–15-of-16 rule (drop the two start laps and the finish lap).
+- **Identity-preserving on 250 m by construction:** 250 m → 16 laps, 14 interior, line height 3–15, steady 3–15 — exactly the old constants. All 26 fixture/unit files pass unchanged, including the gates that assert exact CdA and calibration values on his real rides (VELO ride re-checked live: CdA 0.1649, laps 3–15, 3,250 m datum, all identical).
+- **UI followed the venue too:** `MetadataForm` catch-lap and exclusion-range validation (was a literal 16), the splits placeholder ("Paste 12 lap times"), `EditRidePanel` catch prefills, `analyzeStoredRide`'s catch exclusion, and the ride-detail captions — extra-distance datum, lap-table notes, and the conventions paragraph now render "3,000 m", "laps 3–11", "lap 12" instead of the 250 m literals.
+
+**This file also has a dead speed channel** (386 records, cadence peak 119, speed/distance all zero) — same no-speed-sensor case as the 2023-07-05 file, so it uses cadence reconstruction and the gear matters: 59×14 → 250.5 s, 60×14 → 245.2 s.
+
+**Verified live** on the real file at the COS venue: 12 lap rows, CdA (laps 3–11) 0.1890 m², ρ 0.9585 estimated from the 1840 m altitude, 4:10.507, 57.48 km/h, calibration c = 0.99999, no lap-count quality flag, zero console errors.
+
+**Test status:** `npm test` **265/265** (4 new: 12-vs-16 lap construction, the 3–11 window, the 250 m 3–15 window unchanged, catch-range clamping); `tsc -b`, `npm run lint`, `npm run build` clean. `ENGINE_VERSION` deliberately NOT bumped — 250 m results are bit-identical, so cached analyses stay valid. Staged file removed.

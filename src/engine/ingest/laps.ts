@@ -15,14 +15,60 @@ import type { Sample, TrackModel } from '../types'
 import type { Detection, LapConstruction, Timeline } from './types'
 import { crossingTime, interpAt } from './util'
 
-const LAP_M = 250
-const N_LAPS = 16
-const INTERIOR_LAPS = 14
+/** Individual-pursuit race distance, m — the datum every lap plan divides up. */
+const RACE_DISTANCE_M = 4000
 
-/** First/last 1-based lap included in line-height reporting (owner convention 2026-07):
- * laps 1–2 and the last lap carry too much boundary uncertainty. */
+/** Fallback lap count for the catch-exclusion helpers when no venue is in hand (the 250 m
+ * track the app was built around). Callers that know the venue pass `lapsForTrack` instead —
+ * on a 333 m track the count is 12 and an unpassed default would clamp ranges too wide. */
+export const DEFAULT_LAP_COUNT = 16
+
+/** Laps in a 4 km race at this venue's lap length: 16 at 250 m, 12 at 333.33 m. */
+export function lapsForTrack(lapLengthM: number): number {
+  return Math.round(RACE_DISTANCE_M / lapLengthM)
+}
+
+/** First 1-based lap included in line-height reporting (owner convention 2026-07): laps 1–2
+ * carry the standing-start anchor, and the final lap carries the finish surge, so both ends
+ * are too uncertain to read as line height. */
 const LINE_HEIGHT_FIRST_LAP = 3
-const LINE_HEIGHT_LAST_LAP = 15
+
+/**
+ * The lap plan for a venue (owner report 2026-08-16). This module used to hardcode a
+ * 250 m / 16-lap track, so a 4 km race on the 333.33 m Colorado Springs venue was carved
+ * into 16 fake 250 m laps while `expectedLapCount` — which does read the venue — correctly
+ * said 12. Everything is now derived from the track.
+ *
+ * On a 250 m track this reproduces the old constants exactly (16 laps, 14 interior, line
+ * height over laps 3–15), so existing rides are numerically unchanged.
+ */
+export interface LapPlan {
+  lapLengthM: number
+  nLaps: number
+  interiorLaps: number
+  lineHeightFirstLap: number
+  lineHeightLastLap: number
+}
+
+export function lapPlan(track: TrackModel): LapPlan {
+  const lapLengthM = track.lapLengthM
+  const nLaps = Math.round(RACE_DISTANCE_M / lapLengthM)
+  return {
+    lapLengthM,
+    nLaps,
+    // The interior calibration window drops the first and last lap.
+    interiorLaps: nLaps - 2,
+    lineHeightFirstLap: LINE_HEIGHT_FIRST_LAP,
+    // Laps 3–15 of 16; on the 12-lap 333 m track that generalises to 3–11 (owner choice
+    // 2026-08-16, the direct analogue: drop the two start laps and the finish lap).
+    lineHeightLastLap: nLaps - 1,
+  }
+}
+
+/** Laps a constructed race actually has — the boundary list already encodes it. */
+function lapCountOf(laps: LapConstruction): number {
+  return laps.lapBoundaryTimes.length - 1
+}
 /** Official splits are only trusted for anchoring when they sum to the official time. */
 const SPLITS_SUM_TOLERANCE_S = 2.0
 
@@ -30,16 +76,18 @@ export function constructLaps(
   tl: Timeline,
   detection: Detection,
   officialTimeS: number,
+  track: TrackModel,
   officialSplits?: number[],
 ): LapConstruction {
   const { t, d } = tl
   const { t0, d0 } = detection
+  const { lapLengthM: LAP_M, nLaps: N_LAPS, interiorLaps: INTERIOR_LAPS, lineHeightLastLap } = lapPlan(track)
 
   // Whole-race calibration anchored to the official finish.
   const dRawFull = interpAt(t, d, t0 + officialTimeS) - d0
   const calibrationRace = (N_LAPS * LAP_M) / dRawFull
 
-  // 16 lap-line crossings at datum n·250 m (converted back to raw distance via calibration).
+  // N lap-line crossings at datum n·L (converted back to raw distance via calibration).
   const lapBoundaryTimes: number[] = [t0]
   for (let ln = 1; ln <= N_LAPS; ln++) {
     const targetRaw = (ln * LAP_M) / calibrationRace + d0
@@ -48,8 +96,9 @@ export function constructLaps(
   }
   const lapCount = lapBoundaryTimes.slice(1).filter((x) => !Number.isNaN(x)).length
 
-  // Interior 14-lap calibration factor (laps 2..15 → boundaries index 1..15).
-  const dRaw14 = interpAt(t, d, lapBoundaryTimes[15]) - interpAt(t, d, lapBoundaryTimes[1])
+  // Interior calibration factor over laps 2..N−1 → boundaries index 1..N−1.
+  const dRaw14 =
+    interpAt(t, d, lapBoundaryTimes[N_LAPS - 1]) - interpAt(t, d, lapBoundaryTimes[1])
   const calibrationInterior = (INTERIOR_LAPS * LAP_M) / dRaw14
 
   // Per-lap line height: (raw lap distance − datum) / 2π, using the rollout-true factor
@@ -79,7 +128,7 @@ export function constructLaps(
       cum.push(acc)
     }
     for (let ln = 0; ln < N_LAPS; ln++) {
-      if (ln + 1 < LINE_HEIGHT_FIRST_LAP || ln + 1 > LINE_HEIGHT_LAST_LAP) {
+      if (ln + 1 < LINE_HEIGHT_FIRST_LAP || ln + 1 > lineHeightLastLap) {
         lineHeightsM.push(Number.NaN)
         continue
       }
@@ -89,7 +138,7 @@ export function constructLaps(
     }
   } else {
     for (let ln = 0; ln < N_LAPS; ln++) {
-      if (ln + 1 < LINE_HEIGHT_FIRST_LAP || ln + 1 > LINE_HEIGHT_LAST_LAP) {
+      if (ln + 1 < LINE_HEIGHT_FIRST_LAP || ln + 1 > lineHeightLastLap) {
         lineHeightsM.push(Number.NaN)
         continue
       }
@@ -116,17 +165,22 @@ export function constructLaps(
   }
 }
 
-const N_HALF_LAPS = N_LAPS * 2
-
 /**
- * Half-lap boundary crossing times (datum n·125 m), SPEC §4.7.2 — deferred at P3/P4,
+ * Half-lap boundary crossing times (datum n·L/2), SPEC §4.7.2 — deferred at P3/P4,
  * built here for §5.9's fastest-half-lap record. Mirrors the full-lap crossings above at
  * twice the resolution, using the same whole-race calibration (calibrationRace) and d0 so
  * every full-lap boundary is also exactly a half-lap boundary (index 2n).
  */
-export function constructHalfLaps(tl: Timeline, detection: Detection, laps: LapConstruction): number[] {
+export function constructHalfLaps(
+  tl: Timeline,
+  detection: Detection,
+  laps: LapConstruction,
+  track: TrackModel,
+): number[] {
   const { t, d } = tl
   const { t0 } = detection
+  const LAP_M = track.lapLengthM
+  const N_HALF_LAPS = lapCountOf(laps) * 2
   const boundaries: number[] = [t0]
   for (let hn = 1; hn <= N_HALF_LAPS; hn++) {
     const targetRaw = (hn * (LAP_M / 2)) / laps.calibrationRace + laps.d0
@@ -162,7 +216,7 @@ export function lapSampleGroups(
   const L = track.lapLengthM
   const groups: Sample[][] = []
 
-  for (let ln = 0; ln < N_LAPS; ln++) {
+  for (let ln = 0; ln < lapCountOf(laps); ln++) {
     const a = laps.lapBoundaryTimes[ln]
     const b = laps.lapBoundaryTimes[ln + 1]
     if (Number.isNaN(a) || Number.isNaN(b)) {
@@ -212,7 +266,7 @@ export function lapBoundaryVComs(tl: Timeline, laps: LapConstruction): BoundaryV
  */
 export function defaultCatchExclusionRange(
   caughtAtLap: number,
-  lapCount = N_LAPS,
+  lapCount = DEFAULT_LAP_COUNT,
 ): { fromLap: number; toLap: number } | null {
   if (!Number.isFinite(caughtAtLap) || caughtAtLap <= 0) return null
   // Lap n spans (n−1, n) in lap units; first lap intersecting (catch−2, ·) and last lap
@@ -223,7 +277,7 @@ export function defaultCatchExclusionRange(
 }
 
 /** Expand an inclusive 1-based lap range into the lap-number list the engine consumes. */
-export function lapRangeToLaps(fromLap: number, toLap: number, lapCount = N_LAPS): number[] {
+export function lapRangeToLaps(fromLap: number, toLap: number, lapCount = DEFAULT_LAP_COUNT): number[] {
   const out: number[] = []
   for (let n = Math.max(1, Math.round(fromLap)); n <= Math.min(lapCount, Math.round(toLap)); n++) out.push(n)
   return out
@@ -237,7 +291,7 @@ export function caughtRiderExcludedLaps(
   caughtAtLap: number,
   fromLap?: number,
   toLap?: number,
-  lapCount = N_LAPS,
+  lapCount = DEFAULT_LAP_COUNT,
 ): number[] {
   if (fromLap != null && toLap != null && Number.isFinite(fromLap) && Number.isFinite(toLap)) {
     return lapRangeToLaps(fromLap, toLap, lapCount)
@@ -264,7 +318,7 @@ export function raceSampleSeries(tl: Timeline, laps: LapConstruction, track: Tra
   const d0 = laps.d0
   const L = track.lapLengthM
   const a = laps.lapBoundaryTimes[0]
-  const b = laps.lapBoundaryTimes[N_LAPS]
+  const b = laps.lapBoundaryTimes[lapCountOf(laps)]
   if (Number.isNaN(a) || Number.isNaN(b)) return []
 
   const out: DistancedSample[] = []

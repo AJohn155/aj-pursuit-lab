@@ -4,7 +4,7 @@
 // ride-detail page, which needs the rich per-second diagnostics (traces, overlay, rolling
 // CdA, W′bal curve) that aren't part of the compact persisted AnalysisResult.
 
-import { analyzeRideFull, caughtRiderExcludedLaps } from '../engine/ingest'
+import { analyzeRideFull, caughtRiderExcludedLaps, lapsForTrack } from '../engine/ingest'
 import type { FullRideAnalysis } from '../engine/ingest'
 import { effectiveCrr, makeTrack } from '../engine/index'
 import type { RiderParams } from '../engine/index'
@@ -52,7 +52,12 @@ export function analyzeStoredRide(ride: Ride, venue: Venue, rawSettings: Setting
     // the cdaExclCatch companion. Owner-edited range wins; else the default (−2 → +1).
     excludeCdaLaps:
       ride.flags.caughtRider && ride.caughtAtLap != null
-        ? caughtRiderExcludedLaps(ride.caughtAtLap, ride.caughtExcludeFromLap, ride.caughtExcludeToLap)
+        ? caughtRiderExcludedLaps(
+            ride.caughtAtLap,
+            ride.caughtExcludeFromLap,
+            ride.caughtExcludeToLap,
+            lapsForTrack(venue.lapLengthM),
+          )
         : undefined,
   })
 }

@@ -6,7 +6,14 @@ import type { FormEvent } from 'react'
 import { airDensity as computeAirDensity, effectiveCrr, makeTrack } from '../../engine/index'
 import type { RiderParams } from '../../engine/index'
 import { ENGINE_VERSION } from '../../engine/constants'
-import { analyzeRideFull, caughtRiderExcludedLaps, defaultCatchExclusionRange, fitStartDate } from '../../engine/ingest'
+import {
+  analyzeRideFull,
+  caughtRiderExcludedLaps,
+  DEFAULT_LAP_COUNT,
+  defaultCatchExclusionRange,
+  fitStartDate,
+  lapsForTrack,
+} from '../../engine/ingest'
 import { fallbackDensity } from '../../store/density'
 import { parseSplitsText } from './splits'
 import KitPicker from '../../components/KitPicker'
@@ -114,6 +121,10 @@ function MetadataFormInner({
   const parsedSplits = parseSplitsText(splitsText)
 
   const venue: Venue | undefined = venues.find((v) => v.id === venueId)
+  // Laps in a 4 km race at this venue: 16 on a 250 m track, 12 on the 333.33 m one. Every
+  // lap-numbered field below follows the venue rather than assuming 16 (owner report
+  // 2026-08-16); before a venue is chosen, fall back to the 250 m default.
+  const nLaps = venue ? lapsForTrack(venue.lapLengthM) : DEFAULT_LAP_COUNT
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -181,8 +192,8 @@ function MetadataFormInner({
       return
     }
     const caughtAtLapVal = caughtAtLap.trim() === '' ? undefined : Number.parseFloat(caughtAtLap)
-    if (caughtRider && caughtAtLapVal != null && !(caughtAtLapVal > 0 && caughtAtLapVal <= 16)) {
-      setError('“Caught at lap” must be between 0 and 16 (e.g. 7.5), or left blank.')
+    if (caughtRider && caughtAtLapVal != null && !(caughtAtLapVal > 0 && caughtAtLapVal <= nLaps)) {
+      setError(`“Caught at lap” must be between 0 and ${nLaps} (e.g. 7.5), or left blank.`)
       return
     }
     const caughtFromVal = caughtFrom.trim() === '' ? undefined : Number.parseInt(caughtFrom, 10)
@@ -192,9 +203,9 @@ function MetadataFormInner({
       caughtAtLapVal != null &&
       caughtFromVal != null &&
       caughtToVal != null &&
-      !(caughtFromVal >= 1 && caughtToVal <= 16 && caughtFromVal <= caughtToVal)
+      !(caughtFromVal >= 1 && caughtToVal <= nLaps && caughtFromVal <= caughtToVal)
     ) {
-      setError('Catch exclusion range must satisfy 1 ≤ from ≤ to ≤ 16.')
+      setError(`Catch exclusion range must satisfy 1 ≤ from ≤ to ≤ ${nLaps}.`)
       return
     }
     const track = makeTrack(venue.lapLengthM, venue.bendRadiusM)
@@ -225,7 +236,7 @@ function MetadataFormInner({
           : undefined,
         excludeCdaLaps:
           caughtRider && Number.isFinite(caughtAtLapVal)
-            ? caughtRiderExcludedLaps(caughtAtLapVal as number, caughtFromVal, caughtToVal)
+            ? caughtRiderExcludedLaps(caughtAtLapVal as number, caughtFromVal, caughtToVal, nLaps)
             : undefined,
       })
 
@@ -478,7 +489,7 @@ function MetadataFormInner({
           value={splitsText}
           onChange={(e) => setSplitsText(e.target.value)}
           rows={2}
-          placeholder="Paste 16 lap times — per-lap or cumulative, spaces/commas/newlines all fine"
+          placeholder={`Paste ${nLaps} lap times — per-lap or cumulative, spaces/commas/newlines all fine`}
           className={inputClass}
         />
         {splitsText.trim() !== '' && !parsedSplits.error && (
@@ -513,7 +524,7 @@ function MetadataFormInner({
                 type="number"
                 step="0.25"
                 min="1"
-                max="16"
+                max={nLaps}
                 value={caughtAtLap}
                 onChange={(e) => handleCaughtAtLapChange(e.target.value)}
                 placeholder="7.5"
@@ -526,7 +537,7 @@ function MetadataFormInner({
                 type="number"
                 step="1"
                 min="1"
-                max="16"
+                max={nLaps}
                 value={caughtFrom}
                 onChange={(e) => setCaughtFrom(e.target.value)}
                 className="w-16 rounded-md border border-slate-300 px-2 py-1 text-sm"
@@ -536,7 +547,7 @@ function MetadataFormInner({
                 type="number"
                 step="1"
                 min="1"
-                max="16"
+                max={nLaps}
                 value={caughtTo}
                 onChange={(e) => setCaughtTo(e.target.value)}
                 className="w-16 rounded-md border border-slate-300 px-2 py-1 text-sm"

@@ -9,7 +9,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import KitPicker from '../../../components/KitPicker'
 import { ENGINE_VERSION } from '../../../engine/constants'
-import { defaultCatchExclusionRange } from '../../../engine/ingest'
+import { defaultCatchExclusionRange, lapsForTrack } from '../../../engine/ingest'
 import { dataStore } from '../../../store/DataStore'
 import { analyzeStoredRide } from '../../../store/analyzeStoredRide'
 import { resolveRideDensity } from '../../../store/density'
@@ -53,6 +53,11 @@ function EditRidePanelInner({
   const [round, setRound] = useState<Ride['round']>(ride.round)
   const [result, setResult] = useState(ride.result ?? '')
   const [venueId, setVenueId] = useState(ride.venueId)
+  // Laps at the currently-selected venue — 16 at 250 m, 12 at 333.33 m — so the catch
+  // prefills clamp to this ride's real lap count (owner report 2026-08-16).
+  const rideLapCount = lapsForTrack(
+    (venues.find((v) => v.id === venueId) ?? venues.find((v) => v.id === ride.venueId))?.lapLengthM ?? 250,
+  )
   const [kit, setKit] = useState<string[]>(ride.kit)
   const [notes, setNotes] = useState(ride.notes)
   const [splitsText, setSplitsText] = useState(ride.officialSplits.map((s) => s.toFixed(3)).join(' '))
@@ -72,19 +77,19 @@ function EditRidePanelInner({
   // Exclusion range (round 8): the ride's own saved range, else the default for its catch.
   const [caughtFrom, setCaughtFrom] = useState(() => {
     if (ride.caughtExcludeFromLap != null) return String(ride.caughtExcludeFromLap)
-    const def = ride.caughtAtLap != null ? defaultCatchExclusionRange(ride.caughtAtLap) : null
+    const def = ride.caughtAtLap != null ? defaultCatchExclusionRange(ride.caughtAtLap, rideLapCount) : null
     return def ? String(def.fromLap) : ''
   })
   const [caughtTo, setCaughtTo] = useState(() => {
     if (ride.caughtExcludeToLap != null) return String(ride.caughtExcludeToLap)
-    const def = ride.caughtAtLap != null ? defaultCatchExclusionRange(ride.caughtAtLap) : null
+    const def = ride.caughtAtLap != null ? defaultCatchExclusionRange(ride.caughtAtLap, rideLapCount) : null
     return def ? String(def.toLap) : ''
   })
   const [interrupted, setInterrupted] = useState(ride.flags.interrupted)
 
   function handleCaughtAtLapChange(value: string) {
     setCaughtAtLap(value)
-    const def = defaultCatchExclusionRange(Number.parseFloat(value))
+    const def = defaultCatchExclusionRange(Number.parseFloat(value), rideLapCount)
     setCaughtFrom(def ? String(def.fromLap) : '')
     setCaughtTo(def ? String(def.toLap) : '')
   }

@@ -159,7 +159,7 @@ describe('pipeline stages are individually callable (composition sanity)', () =>
     const records = parseFitRecords(loadBytes(expected.rides.final.file))
     const tl = buildTimeline(records)
     const det = detectRace(tl, expected.rides.final.officialTimeS)
-    const laps = constructLaps(tl, det, expected.rides.final.officialTimeS)
+    const laps = constructLaps(tl, det, expected.rides.final.officialTimeS, track)
     expect(laps.lapBoundaryTimes).toHaveLength(17) // t0 + 16 lap lines
     expect(det.raceWindow.endIdx).toBeGreaterThan(det.raceWindow.startIdx)
   })

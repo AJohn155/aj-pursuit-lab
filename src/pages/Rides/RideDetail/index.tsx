@@ -155,7 +155,7 @@ export default function RideDetail() {
 
       {editing && <EditRidePanel ride={ride} venues={venues} onDone={() => setEditing(false)} />}
 
-      <RideSummary ride={ride} full={full} />
+      <RideSummary ride={ride} full={full} venue={venue} />
       <Traces
         t={full.base.timeline.t}
         v={full.base.timeline.v}
@@ -165,6 +165,7 @@ export default function RideDetail() {
         catchTimeS={catchTimeS}
       />
       <LapTable
+        lapLengthM={venue.lapLengthM}
         laps={full.analysisResult.laps}
         officialSplits={ride.officialSplits}
         construction={full.base.laps}

@@ -8,7 +8,8 @@
 import { useState } from 'react'
 import type { FullRideAnalysis } from '../../../engine/ingest'
 import { dataStore } from '../../../store/DataStore'
-import type { Ride } from '../../../store/types'
+import { lapsForTrack } from '../../../engine/ingest'
+import type { Ride, Venue } from '../../../store/types'
 import { formatRaceTime } from '../format'
 import { T } from '../../../components/EditableText'
 
@@ -28,10 +29,24 @@ function describeWindow(windowLaps: number[]): string {
   return `${base} excl. ${runLabel}`
 }
 
-export default function RideSummary({ ride, full }: { ride: Ride; full: FullRideAnalysis }) {
+export default function RideSummary({
+  ride,
+  full,
+  venue,
+}: {
+  ride: Ride
+  full: FullRideAnalysis
+  venue: Venue
+}) {
   const r = full.analysisResult
   const avgSpeedKmh = (RACE_DISTANCE_M / ride.officialTimeS) * 3.6
   const windowText = describeWindow(full.base.cdaWindowLaps)
+  // Line-height datum follows the venue: 13 laps × 250 m = 3,250 m on a 250 m track,
+  // 9 laps × 333.33 m ≈ 3,000 m on the 333 m one (owner report 2026-08-16).
+  const lineHeightLaps = full.base.laps.lineHeightsM.filter((h) => Number.isFinite(h))
+  const lineHeightFirst = full.base.laps.lineHeightsM.findIndex((h) => Number.isFinite(h)) + 1
+  const lineHeightLast = lineHeightFirst + lineHeightLaps.length - 1
+  const datumM = lineHeightLaps.length * venue.lapLengthM
 
   const startSplit = ride.officialSplits[0]
   const stats: { label: string; value: string; hint?: string }[] = [
@@ -84,7 +99,7 @@ export default function RideSummary({ ride, full }: { ride: Ride; full: FullRide
         ride.speedSource === 'cadence' || !Number.isFinite(full.base.laps.extraDistanceM)
           ? '—'
           : `${Math.max(0, full.base.laps.extraDistanceM).toFixed(1)} m`,
-      hint: 'vs the 3,250 m datum, laps 3–15',
+      hint: `vs the ${datumM.toLocaleString(undefined, { maximumFractionDigits: 0 })} m datum, laps ${lineHeightFirst}–${lineHeightLast}`,
     },
     { label: 'Data quality', value: `${Math.round(full.quality.score)}/100` },
   ]
@@ -102,7 +117,8 @@ export default function RideSummary({ ride, full }: { ride: Ride; full: FullRide
         ))}
       </div>
       <RideNotes ride={ride} />
-      <T as="p" className="mt-1 text-xs text-slate-400" id="rides.ridedetail.summary.convention-note" d="Power conventions: “avg power” averages recorded samples (SRM-style, the app-wide convention); “excl. lap 1” averages from the lap-2 line to the finish. CdA is the single energy balance over laps 3–15 — the app-wide number. On caught rides, “CdA excl. catch” removes the exclusion-range laps (editable in Edit details): the clean estimate of your own aero. Lap 16 is excluded like line height: its end boundary inherits the start-anchor timing error, and an error there lands in the post-line coast-down, which the balance misreads as drag." />
+      <T as="p" className="mt-1 text-xs text-slate-400" id="rides.ridedetail.summary.convention-note" d="Power conventions: “avg power” averages recorded samples (SRM-style, the app-wide convention); “excl. lap 1” averages from the lap-2 line to the finish. CdA is the single energy balance over {window} — the app-wide number. On caught rides, “CdA excl. catch” removes the exclusion-range laps (editable in Edit details): the clean estimate of your own aero. Lap {lastLap} is excluded like line height: its end boundary inherits the start-anchor timing error, and an error there lands in the post-line coast-down, which the balance misreads as drag."
+        vars={{ window: windowText, lastLap: String(lapsForTrack(venue.lapLengthM)) }} />
     </section>
   )
 }

@@ -91,6 +91,46 @@ describe('detectRace on a dead speed channel (owner file 2023-07-05)', () => {
   })
 })
 
+describe('non-250 m tracks (owner report 2026-08-16, 333.33 m Colorado Springs)', () => {
+  // The lap engine hardcoded LAP_M=250/N_LAPS=16, so a 4 km race on the 333.33 m venue was
+  // carved into 16 fake 250 m laps while expectedLapCount — which does read the venue —
+  // said 12. Both halves now derive from the track.
+  const track333 = makeTrack(333.33, 33.5)
+  const officialTimeS = 246.793
+  const lapsOn = (t: ReturnType<typeof makeTrack>) => {
+    const tl = buildTimeline(
+      parseFitRecords(fs.readFileSync(`${fixturesDir}SRM_PM9_ANDERS_TP_2025-10-24_13-18-40.fit`)),
+    )
+    return constructLaps(tl, detectRace(tl, officialTimeS), officialTimeS, t)
+  }
+
+  it('cuts 12 laps on a 333.33 m track and 16 on a 250 m one', () => {
+    expect(lapsOn(track333).lapBoundaryTimes).toHaveLength(13) // t0 + 12 boundaries
+    expect(lapsOn(track).lapBoundaryTimes).toHaveLength(17)
+  })
+
+  it('reports line height over laps 3–11 of 12 (the 3–15 of 16 convention generalised)', () => {
+    const lh = lapsOn(track333).lineHeightsM
+    expect(lh).toHaveLength(12)
+    for (const lap of [1, 2, 12]) expect(Number.isNaN(lh[lap - 1])).toBe(true)
+    for (let lap = 3; lap <= 11; lap++) expect(Number.isFinite(lh[lap - 1])).toBe(true)
+  })
+
+  it('keeps the 250 m interior window at laps 3–15 exactly as before', () => {
+    const lh = lapsOn(track).lineHeightsM
+    for (const lap of [1, 2, 16]) expect(Number.isNaN(lh[lap - 1])).toBe(true)
+    for (let lap = 3; lap <= 15; lap++) expect(Number.isFinite(lh[lap - 1])).toBe(true)
+  })
+
+  it('clamps catch-exclusion ranges to the venue lap count', () => {
+    // A catch at lap 11.5 on a 12-lap race must not propose lap 13.
+    expect(caughtRiderExcludedLaps(11.5, undefined, undefined, 12)).toEqual([10, 11, 12])
+    expect(defaultCatchExclusionRange(11.5, 12)).toEqual({ fromLap: 10, toLap: 12 })
+    // Unchanged on 16 laps.
+    expect(defaultCatchExclusionRange(7.5, 16)).toEqual({ fromLap: 6, toLap: 9 })
+  })
+})
+
 describe('start reconstruction on fixtures (SPEC §4.6)', () => {
   const analyze = (file: string, officialTimeS: number, rho: number) =>
     analyzeRide(fs.readFileSync(`${fixturesDir}${file}`), { officialTimeS, rho, params, track })
@@ -123,7 +163,7 @@ describe('per-lap line height, interior laps 3–15 (SPEC §4.7.4, owner convent
       parseFitRecords(fs.readFileSync(`${fixturesDir}SRM_PM9_ANDERS_TP_2025-10-24_13-18-40.fit`)),
     )
     const det = detectRace(tl, officialTimeS)
-    return constructLaps(tl, det, officialTimeS, splits)
+    return constructLaps(tl, det, officialTimeS, track, splits)
   }
 
   it('reports laps 3–15 only — laps 1, 2, 16 are NaN (boundary uncertainty)', () => {
@@ -174,8 +214,8 @@ describe('half-lap construction (SPEC §4.7.2, §5.9 fastest-half-lap)', () => {
     ] as const) {
       const tl = buildTimeline(parseFitRecords(fs.readFileSync(`${fixturesDir}${file}`)))
       const det = detectRace(tl, officialTimeS)
-      const laps = constructLaps(tl, det, officialTimeS)
-      const halfBoundaries = constructHalfLaps(tl, det, laps)
+      const laps = constructLaps(tl, det, officialTimeS, track)
+      const halfBoundaries = constructHalfLaps(tl, det, laps, track)
       const halves = halfLapTimes(halfBoundaries)
 
       expect(halves).toHaveLength(32)
@@ -195,7 +235,7 @@ describe('venue geometry fitting (SPEC §4.8)', () => {
   function fitFor(file: string, officialTimeS: number) {
     const tl = buildTimeline(parseFitRecords(fs.readFileSync(`${fixturesDir}${file}`)))
     const det = detectRace(tl, officialTimeS)
-    const laps = constructLaps(tl, det, officialTimeS)
+    const laps = constructLaps(tl, det, officialTimeS, track)
     return fitVenueGeometry(steadyLapSpeedProfiles(tl, laps, 250), 250)
   }
 
@@ -260,7 +300,7 @@ describe('accel/decel summary on fixtures (SPEC §4.15 accelDecel)', () => {
   function accelDecelFor(file: string, officialTimeS: number) {
     const tl = buildTimeline(parseFitRecords(fs.readFileSync(`${fixturesDir}${file}`)))
     const det = detectRace(tl, officialTimeS)
-    const laps = constructLaps(tl, det, officialTimeS)
+    const laps = constructLaps(tl, det, officialTimeS, track)
     return computeAccelDecel(tl, laps)
   }
 
@@ -284,7 +324,7 @@ describe('speed-vs-position overlay on fixtures (SPEC §5.1)', () => {
       parseFitRecords(fs.readFileSync(`${fixturesDir}SRM_PM9_ANDERS_TP_2025-10-24_13-18-40.fit`)),
     )
     const det = detectRace(tl, 246.793)
-    const laps = constructLaps(tl, det, 246.793)
+    const laps = constructLaps(tl, det, 246.793, track)
     const overlay = lapSpeedVsPositionSeries(tl, laps, 250)
 
     expect(overlay).toHaveLength(16)
