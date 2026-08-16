@@ -1,5 +1,5 @@
 // Rides list (SPEC §5.1): table of all rides — date, event, venue, time, normalized time,
-// avg W, CdA, quality badge, kit tags — sortable, linking to ride detail.
+// start lap, avg W, CdA, quality badge, kit tags — sortable, linking to ride detail.
 
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -10,7 +10,7 @@ import { rideDateTimeKey, SETTINGS_ID, withSettingsDefaults, type Ride, type Ven
 import { useCollection } from '../../store/useCollection'
 import { BADGE_CLASSES, displayAvgPower, displayPowerExclLap1, formatRaceTime, qualityBadgeForScore } from './format'
 
-type SortKey = 'date' | 'timeS' | 'normalizedTimeS' | 'avgW' | 'powerExclLap1' | 'cda' | 'quality'
+type SortKey = 'date' | 'timeS' | 'normalizedTimeS' | 'startLapS' | 'avgW' | 'powerExclLap1' | 'cda' | 'quality'
 
 function buildRow(
   ride: Ride,
@@ -27,7 +27,11 @@ function buildRow(
   const powerExclLap1 = ride.analysis ? displayPowerExclLap1(ride.analysis) : null
   const cda = ride.analysis?.cdaRace ?? null
   const quality = ride.analysis?.qualityScore ?? null
-  return { ride, venueName, normalizedTimeS, avgW, powerExclLap1, cda, quality }
+  // Official lap-1 split — the standing start, the same number the ride-detail summary
+  // shows (owner request 2026-08-16). Only ever the official value: the detected lap 1
+  // inherits the t0 anchor, so it isn't comparable across rides.
+  const startLapS = ride.officialSplits[0] ?? null
+  return { ride, venueName, normalizedTimeS, startLapS, avgW, powerExclLap1, cda, quality }
 }
 
 export default function RidesList() {
@@ -64,6 +68,8 @@ export default function RidesList() {
           return dir * (a.ride.officialTimeS - b.ride.officialTimeS)
         case 'normalizedTimeS':
           return dir * (a.normalizedTimeS - b.normalizedTimeS)
+        case 'startLapS':
+          return dir * ((a.startLapS ?? -Infinity) - (b.startLapS ?? -Infinity))
         case 'avgW':
           return dir * ((a.avgW ?? -Infinity) - (b.avgW ?? -Infinity))
         case 'powerExclLap1':
@@ -103,6 +109,7 @@ export default function RidesList() {
     { key: 'date', label: 'Date' },
     { key: 'timeS', label: 'Time' },
     { key: 'normalizedTimeS', label: 'Norm. time' },
+    { key: 'startLapS', label: 'Start lap' },
     { key: 'avgW', label: 'Avg W' },
     { key: 'powerExclLap1', label: 'W excl. L1' },
     { key: 'cda', label: 'CdA' },
@@ -118,7 +125,7 @@ export default function RidesList() {
         className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm sm:w-72"
       />
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[720px] text-left text-sm">
+        <table className="w-full min-w-[800px] text-left text-sm">
           <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
             <tr>
               <th className="px-3 py-2 font-medium">Event / Venue</th>
@@ -133,7 +140,7 @@ export default function RidesList() {
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ ride, venueName, normalizedTimeS, avgW, powerExclLap1, cda, quality }) => (
+            {rows.map(({ ride, venueName, normalizedTimeS, startLapS, avgW, powerExclLap1, cda, quality }) => (
               <tr key={ride.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                 <td className="px-3 py-2">
                   <Link to={`/rides/${ride.id}`} className="font-medium text-slate-900 hover:underline">
@@ -166,6 +173,12 @@ export default function RidesList() {
                 </td>
                 <td className="px-3 py-2 text-slate-600">{formatRaceTime(ride.officialTimeS)}</td>
                 <td className="px-3 py-2 text-slate-600">{formatRaceTime(normalizedTimeS)}</td>
+                <td
+                  className="px-3 py-2 text-slate-600"
+                  title={startLapS != null ? 'Official lap-1 split' : 'No official splits on this ride'}
+                >
+                  {startLapS != null ? `${startLapS.toFixed(3)}s` : '—'}
+                </td>
                 <td className="px-3 py-2 text-slate-600">{avgW != null ? `${avgW.toFixed(0)} W` : '—'}</td>
                 <td className="px-3 py-2 text-slate-600">
                   {powerExclLap1 != null ? `${powerExclLap1.toFixed(0)} W` : '—'}

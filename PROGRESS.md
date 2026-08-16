@@ -669,3 +669,14 @@ Owner's 2025-08-21 Colorado Springs race (333.33 m outdoor track, 4 km = 12 laps
 **Verified live** on the real file at the COS venue: 12 lap rows, CdA (laps 3–11) 0.1890 m², ρ 0.9585 estimated from the 1840 m altitude, 4:10.507, 57.48 km/h, calibration c = 0.99999, no lap-count quality flag, zero console errors.
 
 **Test status:** `npm test` **265/265** (4 new: 12-vs-16 lap construction, the 3–11 window, the 250 m 3–15 window unchanged, catch-range clamping); `tsc -b`, `npm run lint`, `npm run build` clean. `ENGINE_VERSION` deliberately NOT bumped — 250 m results are bit-identical, so cached analyses stay valid. Staged file removed.
+
+## 2026-08-16 — Owner request: start lap on the rides list
+
+Added a sortable **Start lap** column to the rides list (`RidesList.tsx`), between "Norm. time" and "Avg W" — the ride-detail summary already carried the tile, this brings it to the cross-ride table where progression is read.
+
+- Value is `officialSplits[0]`, formatted to 3 dp like the detail tile; "—" when a ride has no official splits (tooltip says which). Deliberately never the *detected* lap 1: that boundary inherits the t0 start anchor, so it isn't comparable ride-to-ride.
+- Sorts both directions with missing values grouped at the far end (same `-Infinity` convention as the other nullable columns). Table min-width 720→800 px so the extra column doesn't crush the layout on mobile.
+
+**Verified** against the owner's real backup (7 rides with splits + 4 without): values match his official lap-1 splits (20.766–23.387 s), blanks render "—", and sorting is correct in both directions.
+
+**Test status:** `npm test` **265/265**; `tsc -b`, `npm run lint`, `npm run build` clean. Backup copy removed from `public/`.
