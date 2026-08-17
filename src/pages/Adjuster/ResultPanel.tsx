@@ -59,22 +59,39 @@ export default function ResultPanel({
   const lapNumbers = run.lapTimes.map((_, i) => i + 1)
 
   const reproBiasS = baseline === 'blank' ? null : baselineRun.predictedTimeS - baseline.ride.officialTimeS
+  // The sensitivity number (owner report 2026-08-17): scenario model MINUS baseline model.
+  // Both runs carry the same reproduction error, so it cancels exactly — "what is +1 W
+  // worth" is answerable even though neither absolute time lands on the official one.
+  // Measured on his 2024 Pan Am quali: +5 W is −0.798 s here, and stays −0.792…−0.806 s
+  // when the baseline CdA is moved ±5 counts, i.e. it barely notices the ~2-count
+  // disagreement between the fitted and time-matching CdA. Comparing against the official
+  // time instead would have shown +0.027 s for that same +5 W — the reproduction error
+  // swamping the effect being measured.
+  const modelDeltaS = run.predictedTimeS - baselineRun.predictedTimeS
 
   return (
     <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
       <T as="h2" className="text-sm font-semibold text-slate-900" id="adjuster.resultpanel.result" d="Result" />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className={`grid grid-cols-2 gap-3 ${baseline === 'blank' ? 'sm:grid-cols-4' : 'sm:grid-cols-3 lg:grid-cols-5'}`}>
         <Stat label="Predicted time" value={`${run.predictedTimeS.toFixed(3)}s`} />
         <Stat
           label={baseline === 'blank' ? 'Baseline (no overrides)' : 'Baseline actual'}
           value={`${baselineShownS.toFixed(3)}s`}
         />
         <Stat
-          label="Δ vs baseline"
-          value={`${deltaS <= 0 ? '−' : '+'}${Math.abs(deltaS).toFixed(2)}s`}
-          highlight={deltaS < 0 ? 'good' : deltaS > 0 ? 'bad' : undefined}
+          label={baseline === 'blank' ? 'Δ vs baseline' : 'Δ vs baseline (model)'}
+          value={`${modelDeltaS <= 0 ? '−' : '+'}${Math.abs(modelDeltaS).toFixed(2)}s`}
+          highlight={modelDeltaS < 0 ? 'good' : modelDeltaS > 0 ? 'bad' : undefined}
+          hint={baseline === 'blank' ? undefined : 'What the change itself is worth'}
         />
+        {baseline !== 'blank' && (
+          <Stat
+            label="vs actual time"
+            value={`${deltaS <= 0 ? '−' : '+'}${Math.abs(deltaS).toFixed(2)}s`}
+            hint="Carries the reproduction error below"
+          />
+        )}
         <Stat label="CdA used" value={resolved.cdaM2.toFixed(4)} />
       </div>
       {reproBiasS != null && (
@@ -82,7 +99,7 @@ export default function ResultPanel({
           as="p"
           className="text-xs text-slate-400"
           id="adjuster.resultpanel.repro-bias-note"
-          d="The model re-simulates the baseline ride itself at {reproTime}s ({bias}s vs official) — treat predicted deltas smaller than that reproduction bias as noise."
+          d="The model re-simulates the baseline ride itself at {reproTime}s ({bias}s vs official) — a single CdA can't reproduce laps 1 and 16, which the laps 3–15 fit excludes. “Δ vs baseline (model)” differences two model runs, so that error cancels and small changes stay readable; “vs actual time” carries it, so treat that column's small numbers as noise."
           vars={{
             reproTime: baselineRun.predictedTimeS.toFixed(3),
             bias: `${reproBiasS <= 0 ? '−' : '+'}${Math.abs(reproBiasS).toFixed(2)}`,
@@ -145,12 +162,23 @@ export default function ResultPanel({
   )
 }
 
-function Stat({ label, value, highlight }: { label: string; value: string; highlight?: 'good' | 'bad' }) {
+function Stat({
+  label,
+  value,
+  highlight,
+  hint,
+}: {
+  label: string
+  value: string
+  highlight?: 'good' | 'bad'
+  hint?: string
+}) {
   const color = highlight === 'good' ? 'text-green-700' : highlight === 'bad' ? 'text-red-700' : 'text-slate-800'
   return (
     <div className="rounded-lg bg-slate-50 px-3 py-2">
       <p className="text-xs text-slate-500">{label}</p>
       <p className={`text-sm font-semibold ${color}`}>{value}</p>
+      {hint && <p className="mt-0.5 text-[11px] leading-tight text-slate-400">{hint}</p>}
     </div>
   )
 }

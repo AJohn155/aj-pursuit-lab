@@ -711,3 +711,17 @@ Owner selected his 2024 Pan American Championships Qualifying as the Adjuster ba
 This is the same family as the round-4 Δ mismatch in [[pursuit-lab-modeling-conventions]] — a displayed comparison silently mixing two different rides' inputs.
 
 **Test status:** `npm test` **268/268**; `tsc -b`, `npm run lint`, `npm run build` clean. Zero console errors. Backup copy removed from `public/`.
+
+## 2026-08-17 — Owner: "an 0.8 s error doesn't help me when I want to know what +1 W is worth"
+
+Follow-up to the Adjuster prefill fix. Owner asked why the fitted CdA and a time-reproducing CdA differ at all, and proposed a "calibrate CdA to reproduce this ride" button over laps 2–16. Investigated; **calibration turns out to be the wrong fix**, and the real problem was which two numbers the Δ differenced.
+
+**Why the two CdAs differ (not a defect).** The simulator's ODE integrates exactly to the energy balance — same equation, so nothing is missing. But `cdaRace` is fitted on **laps 3–15** and the Adjuster simulates all 4000 m, pricing laps 1, 2 and 16 at a number never fitted to them. On his 2024 Pan Am quali, per-lap CdA over the window spans 0.1807–0.1898 (mean exactly the 0.1865 headline), while **lap 1 = 0.1787 and lap 16 = 0.2012** sit outside it. On the −3.06 s outlier (2025 Nationals Final) the excluded laps are 0.1069 and 0.2472 against a 0.1815 headline. Three checks rule out a missing force: the error does not grow with window length (+0.555 s over 3 laps vs +0.665 s over 13), it is front-loaded, and across 15 rides it is zero-mean scatter (**−0.28 s mean, SD 1.21 s**, both signs).
+
+**Why calibrating CdA doesn't help the actual use case.** Sensitivity is almost immune to the CdA used: +5 W is −0.7985 s at the fitted 0.1865, and −0.7923 / −0.8057 s at ±5 counts either side — under 2 % change across a range far wider than the ~2-count estimator disagreement. Calibrating would move the absolute prediction while barely touching the answer he wants, at the cost of folding lap-1/lap-16 boundary error into his aero number — exactly the contamination the round-7 laps 3–15 convention removed.
+
+**The actual fix (`ResultPanel.tsx`):** the headline Δ now differences **two model runs** (scenario − baseline re-simulation) instead of model-vs-official. Both runs carry the identical reproduction error, so it cancels exactly. The official comparison is kept as its own "vs actual time" stat, so the round-4 requirement that the displayed arithmetic add up still holds, and the fine print now explains which column to trust for what.
+
+**Measured on his ride:** at his own values Δ (model) is **−0.04 s** where the old Δ said +0.83 s; +1 W reads −0.20 s vs that −0.04 s baseline, i.e. **+1 W = −0.16 s** — visible now, where the old column showed +0.67 s and buried it. (The residual −0.04 s is honest: the baseline run uses his real recorded pacing while the scenario uses flat settle power.)
+
+**Test status:** `npm test` **268/268**; `tsc -b`, `npm run lint`, `npm run build` clean. Zero console errors. Backup copy removed from `public/`.
