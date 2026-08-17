@@ -12,10 +12,16 @@ const SOLVE_KEYS: SolveKey[] = ['power', 'cdA', 'crr', 'massKg', 'rho']
 export default function SolveForAnything({
   resolved,
   currentPredictedTimeS,
+  anchorOffsetS = 0,
   onApply,
 }: {
   resolved: ResolvedScenario | null
   currentPredictedTimeS: number | null
+  /** Baseline model time − official time (owner decision 2026-08-17). Displayed predictions
+   * are anchored (official + model delta), but the solver bisects RAW model time — so the
+   * typed target is shifted by this offset before solving, keeping "solve for 253.0, see
+   * 253.0 predicted" true. 0 for blank baselines. */
+  anchorOffsetS?: number
   onApply: (key: SolveKey, value: number) => void
 }) {
   const [key, setKey] = useState<SolveKey>('power')
@@ -33,7 +39,7 @@ export default function SolveForAnything({
       return
     }
     try {
-      setSolved(solveScenarioUnknown(key, target, resolved))
+      setSolved(solveScenarioUnknown(key, target + anchorOffsetS, resolved))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }

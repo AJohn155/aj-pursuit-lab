@@ -13,34 +13,49 @@
 // splits when the ride has them.
 
 import Chart from '../../components/Chart'
-import { buildDistanceTimeSeries, gapCharts } from '../Compare/compare'
+import { gapCharts } from '../Compare/compare'
 import type { DistanceTimeSeries } from '../Compare/compare'
 import type { ResolvedScenario, ScenarioBaseline, ScenarioRunResult } from '../../store/scenario'
+import type { Scenario } from '../../store/types'
 import { T } from '../../components/EditableText'
+
+/** Overrides big enough that the anchor's cancellation argument weakens (owner decision
+ * 2026-08-17): a different venue, or power moved more than this fraction from the ride's
+ * own settle power. Below these, the raw model time stays in the fine print only. */
+const BIG_POWER_FRACTION = 0.05
 
 export default function ResultPanel({
   baseline,
   resolved,
+  baselineResolved,
   run,
   baselineRun,
+  overrides,
 }: {
   baseline: ScenarioBaseline
   resolved: ResolvedScenario
+  /** The same baseline resolved with NO overrides — the run the anchor differences against. */
+  baselineResolved: ResolvedScenario
   run: ScenarioRunResult
   baselineRun: ScenarioRunResult
+  overrides: Scenario['overrides']
 }) {
   // The baseline number the owner actually compares against: the ride's official time, or
-  // the unmodified model run for a blank baseline. Δ is vs THIS number (positive = slower).
+  // the unmodified model run for a blank baseline.
   const baselineShownS = baseline === 'blank' ? baselineRun.predictedTimeS : baseline.ride.officialTimeS
-  const deltaS = run.predictedTimeS - baselineShownS
 
+  // Reference curve for the gap chart: the baseline MODEL run's own dense trajectory (same
+  // model family as the scenario curve), so the chart's endpoint equals the headline Δ.
+  // Comparing against the ride's actual split-anchored curve — the previous reference —
+  // made the endpoint carry the reproduction error the stats now cancel (+0.83 s here vs a
+  // −0.04 s headline; the owner cross-checks exactly this arithmetic).
   const referenceSeries: DistanceTimeSeries =
     baseline === 'blank'
       ? { distM: [0, ...baselineRun.lapSplits.map((_, i) => (i + 1) * resolved.track.lapLengthM)], elapsedS: [0, ...baselineRun.lapSplits] }
-      : buildDistanceTimeSeries(baseline.full, {
-          officialSplits: baseline.ride.officialSplits,
-          lapLengthM: resolved.track.lapLengthM,
-        })
+      : {
+          distM: baselineRun.sim.samples.map((s) => s.s + baselineResolved.lapPhaseOffsetM),
+          elapsedS: baselineRun.sim.samples.map((s) => s.t + baselineResolved.headStartS),
+        }
 
   // Dense scenario curve straight from the simulated trajectory, shifted back onto the
   // true datum/true clock (the sim starts after the head start — see resolveScenario).
@@ -64,32 +79,50 @@ export default function ResultPanel({
   // worth" is answerable even though neither absolute time lands on the official one.
   // Measured on his 2024 Pan Am quali: +5 W is −0.798 s here, and stays −0.792…−0.806 s
   // when the baseline CdA is moved ±5 counts, i.e. it barely notices the ~2-count
-  // disagreement between the fitted and time-matching CdA. Comparing against the official
-  // time instead would have shown +0.027 s for that same +5 W — the reproduction error
-  // swamping the effect being measured.
+  // disagreement between the fitted and time-matching CdA.
   const modelDeltaS = run.predictedTimeS - baselineRun.predictedTimeS
+  // Anchored prediction (owner decision 2026-08-17): the model is trusted as a
+  // differencer, the official time as the clock — so the predicted time is the real ride
+  // plus the model's delta, and Predicted − Baseline = Δ holds exactly on the panel.
+  const anchoredS = baseline === 'blank' ? run.predictedTimeS : baselineShownS + modelDeltaS
+
+  // "Big" overrides where the cancellation assumption weakens: surface the raw model time
+  // as its own stat (owner choice: show both) instead of fine print only.
+  const settleW = baseline === 'blank' ? null : baseline.full.analysisResult.avgPowerExclLap1W
+  const powerIsBig =
+    (overrides.powerScale != null && Math.abs(overrides.powerScale - 1) > BIG_POWER_FRACTION) ||
+    (overrides.avgPowerW != null &&
+      settleW != null &&
+      Number.isFinite(settleW) &&
+      settleW > 0 &&
+      Math.abs(overrides.avgPowerW / settleW - 1) > BIG_POWER_FRACTION)
+  const venueIsChanged = resolved.venue.id !== baselineResolved.venue.id
+  const showRawModel = baseline !== 'blank' && (powerIsBig || venueIsChanged)
 
   return (
     <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
       <T as="h2" className="text-sm font-semibold text-slate-900" id="adjuster.resultpanel.result" d="Result" />
 
-      <div className={`grid grid-cols-2 gap-3 ${baseline === 'blank' ? 'sm:grid-cols-4' : 'sm:grid-cols-3 lg:grid-cols-5'}`}>
-        <Stat label="Predicted time" value={`${run.predictedTimeS.toFixed(3)}s`} />
+      <div className={`grid grid-cols-2 gap-3 ${showRawModel ? 'sm:grid-cols-3 lg:grid-cols-5' : 'sm:grid-cols-4'}`}>
+        <Stat
+          label="Predicted time"
+          value={`${anchoredS.toFixed(3)}s`}
+          hint={baseline === 'blank' ? undefined : 'Your ride + the model delta'}
+        />
         <Stat
           label={baseline === 'blank' ? 'Baseline (no overrides)' : 'Baseline actual'}
           value={`${baselineShownS.toFixed(3)}s`}
         />
         <Stat
-          label={baseline === 'blank' ? 'Δ vs baseline' : 'Δ vs baseline (model)'}
+          label="Δ vs baseline"
           value={`${modelDeltaS <= 0 ? '−' : '+'}${Math.abs(modelDeltaS).toFixed(2)}s`}
           highlight={modelDeltaS < 0 ? 'good' : modelDeltaS > 0 ? 'bad' : undefined}
-          hint={baseline === 'blank' ? undefined : 'What the change itself is worth'}
         />
-        {baseline !== 'blank' && (
+        {showRawModel && (
           <Stat
-            label="vs actual time"
-            value={`${deltaS <= 0 ? '−' : '+'}${Math.abs(deltaS).toFixed(2)}s`}
-            hint="Carries the reproduction error below"
+            label="Raw model"
+            value={`${run.predictedTimeS.toFixed(3)}s`}
+            hint={venueIsChanged ? 'Unanchored — venue changed, so the anchor is a stretch' : 'Unanchored — big power change, so the anchor is a stretch'}
           />
         )}
         <Stat label="CdA used" value={resolved.cdaM2.toFixed(4)} />
@@ -99,17 +132,19 @@ export default function ResultPanel({
           as="p"
           className="text-xs text-slate-400"
           id="adjuster.resultpanel.repro-bias-note"
-          d="The model re-simulates the baseline ride itself at {reproTime}s ({bias}s vs official) — a single CdA can't reproduce laps 1 and 16, which the laps 3–15 fit excludes. “Δ vs baseline (model)” differences two model runs, so that error cancels and small changes stay readable; “vs actual time” carries it, so treat that column's small numbers as noise."
+          d="Predicted time = the ride's official {official}s + the model's delta. The raw model puts the baseline at {reproTime}s ({bias}s vs official — a single CdA can't reproduce laps 1 and 16, which the laps 3–15 fit excludes) and this scenario at {rawScenario}s; differencing the two runs cancels that shared error, so small changes stay readable."
           vars={{
+            official: baselineShownS.toFixed(3),
             reproTime: baselineRun.predictedTimeS.toFixed(3),
             bias: `${reproBiasS <= 0 ? '−' : '+'}${Math.abs(reproBiasS).toFixed(2)}`,
+            rawScenario: run.predictedTimeS.toFixed(3),
           }}
         />
       )}
 
       <div>
         <h3 className="mb-1 text-xs font-semibold uppercase text-slate-500">
-          Gap vs {baseline === 'blank' ? 'unmodified baseline' : 'baseline ride (actual)'}
+          Gap vs {baseline === 'blank' ? 'unmodified baseline' : 'baseline (model run)'}
         </h3>
         <Chart
           ariaLabel="Cumulative time delta of this scenario versus the baseline, by distance"

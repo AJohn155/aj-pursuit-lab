@@ -188,6 +188,15 @@ export default function Adjuster() {
     }
   }, [baselineSnapshot])
 
+  // Anchor terms for the display convention (owner decision 2026-08-17): predicted time =
+  // official + (scenario model − baseline model). The solver targets raw model time, so a
+  // typed target must be shifted by the same offset before solving — "solve for 253.0,
+  // see 253.0 predicted" stays true.
+  const anchorOffsetS =
+    baseline && baseline !== 'blank' && baselineRun ? baselineRun.predictedTimeS - baseline.ride.officialTimeS : 0
+  const anchoredPredictedS =
+    run == null ? null : baseline && baseline !== 'blank' && baselineRun ? run.predictedTimeS - anchorOffsetS : run.predictedTimeS
+
   function handleApplySolved(key: SolveKey, value: number) {
     switch (key) {
       case 'power':
@@ -231,7 +240,9 @@ export default function Adjuster() {
       baseline: state.baselineRef,
       overrides,
       result: {
-        predictedTimeS: run.predictedTimeS,
+        // The anchored time (official + model delta) — the same number the Result panel
+        // headlines, so the saved-scenario list agrees with what was on screen when saved.
+        predictedTimeS: anchoredPredictedS ?? run.predictedTimeS,
         lapSplits: run.lapSplits,
         note: describeOverrides(overrides, baselineSnapshot ?? resolved),
       },
@@ -351,11 +362,23 @@ export default function Adjuster() {
         onChange={handleChange}
       />
 
-      {resolved && run && baselineRun && baseline && (
-        <ResultPanel baseline={baseline} resolved={resolved} run={run} baselineRun={baselineRun} />
+      {resolved && run && baselineRun && baselineSnapshot && baseline && (
+        <ResultPanel
+          baseline={baseline}
+          resolved={resolved}
+          baselineResolved={baselineSnapshot}
+          run={run}
+          baselineRun={baselineRun}
+          overrides={overrides}
+        />
       )}
 
-      <SolveForAnything resolved={resolved} currentPredictedTimeS={run?.predictedTimeS ?? null} onApply={handleApplySolved} />
+      <SolveForAnything
+        resolved={resolved}
+        currentPredictedTimeS={anchoredPredictedS}
+        anchorOffsetS={anchorOffsetS}
+        onApply={handleApplySolved}
+      />
 
       <SavedScenarios
         scenarios={scenarios}
