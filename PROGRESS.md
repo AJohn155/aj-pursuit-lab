@@ -698,3 +698,16 @@ Track mode makes the CdA saving slightly *smaller* (VELO 1.916 s vs flat 1.958 s
 **Verified live:** a seeded stale `mode:'flat'` state promoted to "Full track model" on load; a deliberate switch back to flat survived a reload; the venue picker and note appear only in time mode and update lap length (250 → 333 m); switching venue changes the numbers (65.4 s at VELO vs 65.8 s at COS over 40 km). Zero console errors.
 
 **Test status:** `npm test` **268/268** (3 new: speedAtPowerTrack round-trip, flat-path byte-identical when `track` omitted, track shifts the saving with VELO departing more than COS); `tsc -b`, `npm run lint`, `npm run build` clean.
+
+## 2026-08-17 — Owner report: Adjuster shows a time difference at "the same values"
+
+Owner selected his 2024 Pan American Championships Qualifying as the Adjuster baseline, changed nothing, and got a large time difference. **The physics was fine; the form was seeding someone else's ride.**
+
+- **Diagnosis:** picking a ride baseline left the *blank-baseline* placeholders in the start-split power model — **21.5 s start lap and 450 W settle power**. His ride is 21.130 s off the line and settled at 496 W, so "no changes" actually modelled a rider starting 0.37 s slower and pushing 46 W less: predicted **263.016 s** against an official 253.913 s, a **+9.10 s** delta that was pure stale default. Confirmed by switching to "Scale real pacing 100 %", which gave 254.776 s / +0.86 s — exactly the reproduction bias already printed under the stats.
+- **Fix (`Adjuster/index.tsx`):** selecting a ride baseline now re-seeds `startLapInput` from its official lap-1 split (falling back to the detected lap 1 when a ride has no splits, so it can't inherit the previous baseline's number), `constantPowerInput` from `analysis.avgPowerExclLap1W`, and the gear from `ride.gear`. Gear is only copied when both values are positive — the 2022 Worlds ride is stored as 0/0 (never filled in) and seeding that divided by zero in the cadence readout.
+- **Result:** same ride, no overrides → predicted 254.739 s, **Δ +0.83 s**, now *below* the +0.86 s reproduction bias the panel already tells him to treat as noise. Checked across rides: 2022 Worlds Δ −0.17 s (bias 1.04), 2025 Nationals quali Δ −1.10 s — all inside their own bias.
+- **Saved scenarios are untouched:** they load through `setState` directly rather than `handleChange`, so a saved scenario still restores exactly the numbers it was saved with (verified live).
+
+This is the same family as the round-4 Δ mismatch in [[pursuit-lab-modeling-conventions]] — a displayed comparison silently mixing two different rides' inputs.
+
+**Test status:** `npm test` **268/268**; `tsc -b`, `npm run lint`, `npm run build` clean. Zero console errors. Backup copy removed from `public/`.

@@ -107,6 +107,34 @@ export default function Adjuster() {
       // Switching to a blank baseline while in schedule mode: there's no recording to
       // scale, so fall to the start-split model.
       if (key === 'baselineRef' && value === 'blank' && next.powerMode === 'schedule') next.powerMode = 'startSplit'
+      // Picking a ride baseline re-seeds the start-split inputs from THAT ride (owner
+      // report 2026-08-17). They used to keep the blank-baseline placeholders — 21.5 s and
+      // 450 W — so selecting a ride and changing nothing modelled a rider who starts slower
+      // and settles ~46 W below what he actually rode: his 2024 Pan Am quali predicted
+      // 263.0 s against an official 253.9 s, a +9.1 s "difference" that was pure stale
+      // default, not physics. Gear follows too (it drives the cadence readout, and on
+      // cadence-reconstructed rides it drives speed itself).
+      if (key === 'baselineRef' && typeof value === 'string' && value !== 'blank') {
+        const ride = rides.find((r) => r.id === value)
+        if (ride) {
+          // Official lap 1 when the ride has splits, else the detected one — a ride with
+          // neither would otherwise keep the previous baseline's start lap.
+          const startLap = ride.officialSplits[0] ?? ride.analysis?.laps?.[0]?.timeS
+          if (startLap != null && Number.isFinite(startLap) && startLap > 0) {
+            next.startLapInput = startLap.toFixed(3)
+          }
+          const settleW = ride.analysis?.avgPowerExclLap1W
+          if (settleW != null && Number.isFinite(settleW) && settleW > 0) {
+            next.constantPowerInput = settleW.toFixed(0)
+          }
+          // Only a real gear — the 2022 Worlds ride was saved with 0/0 (never filled in),
+          // and seeding that would divide by zero in the cadence readout.
+          if (ride.gear.chainring > 0 && ride.gear.cog > 0) {
+            next.chainring = ride.gear.chainring
+            next.cog = ride.gear.cog
+          }
+        }
+      }
       return next
     })
     setSaveMessage(null)
