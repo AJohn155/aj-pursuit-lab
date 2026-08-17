@@ -87,6 +87,46 @@ describe('official-split anchoring (owner request 2026-07)', () => {
     }
   })
 
+  // Owner report 2026-08-17: the gap chart dipped then spiked over the last ~40 m. The
+  // series stepped whole seconds and stopped at the last one before the finish, so it
+  // never reached the final lap line — the gap grid's clamp froze the reference there, and
+  // the split anchoring mapped that short last sample onto the official finish time.
+  it('closes on the finish line when it falls between whole seconds', () => {
+    // 4 laps at 15.4 s = 61.6 s total, so the finish falls BETWEEN whole seconds (the
+    // whole point — 15.5 would total exactly 62 s and never exercise the bug).
+    const elapsedPerLapS = 15.4
+    const n = 4 * elapsedPerLapS
+    const speed = 250 / elapsedPerLapS
+    const t: number[] = []
+    const d: number[] = []
+    for (let s = 0; s <= Math.ceil(n); s++) {
+      t.push(s)
+      d.push(s * speed)
+    }
+    const full = {
+      base: {
+        timeline: { t, d },
+        laps: { calibrationInterior: 1, d0: 0, lapBoundaryTimes: [0, n] },
+        detection: { t0: 0 },
+      },
+    } as never
+
+    const plain = buildDistanceTimeSeries(full)
+    expect(plain.distM.at(-1)).toBeCloseTo(1000, 6)
+    expect(plain.elapsedS.at(-1)).toBeCloseTo(n, 6)
+
+    // With official splits the finish carries the official total, at the FINISH distance.
+    const officialSplits = [21.0, 14.5, 14.8, 14.7]
+    const anchored = buildDistanceTimeSeries(full, { officialSplits, lapLengthM: 250 })
+    expect(anchored.distM.at(-1)).toBeCloseTo(1000, 6)
+    expect(timeAtDistance(anchored, 1000)).toBeCloseTo(65.0, 2)
+    // ...and the last sample must actually BE the finish line, not ~10 m short of it.
+    expect(anchored.distM.at(-1)).toBeGreaterThan(999)
+    // The point just before the finish must be strictly earlier — the old bug put the
+    // official finish time on it.
+    expect(anchored.elapsedS.at(-2)).toBeLessThan(anchored.elapsedS.at(-1)!)
+  })
+
   it('without splits the series is unchanged', () => {
     const plain = buildDistanceTimeSeries(syntheticFull(15))
     expect(timeAtDistance(plain, 1000)).toBeCloseTo(60, 1)

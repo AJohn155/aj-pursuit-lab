@@ -66,6 +66,23 @@ export function buildDistanceTimeSeries(
     distM.push(c * (interpAt(t, d, tt) - d0))
     elapsedS.push(tt - detection.t0)
   }
+  // Close the series exactly on the finish line (owner report 2026-08-17). The loop above
+  // steps whole seconds and `b` — the last lap-line crossing — almost never lands on one,
+  // so the series used to stop up to a second short: on his 2024 Pan Am quali the final
+  // point was 3985.20 m, 14.8 m before the line. Two things broke downstream. The gap
+  // chart's grid runs to 4000 m and `timeAtDistance` CLAMPS past the last point, so the
+  // reference's clock froze over that stretch and the final grid point jumped ~0.95 s.
+  // Worse, the split-anchoring below asks for `timeAtDistance(series, nLaps·L)`, which hit
+  // the same clamp — so the last sample, not the finish, was mapped onto the official
+  // finish time, skewing the whole last lap. `b` is by construction the crossing of the
+  // final datum, so this point is exact rather than an extrapolation.
+  // Taken from the same expression the loop uses, evaluated at `b`, so it's the series'
+  // own datum distance at the final lap line rather than an assumed lap-count × lap-length.
+  const finishDistM = c * (interpAt(t, d, b) - d0)
+  if (distM.length > 0 && distM[distM.length - 1] < finishDistM - 1e-6) {
+    distM.push(finishDistM)
+    elapsedS.push(b - detection.t0)
+  }
   const series = { distM, elapsedS }
 
   const splits = opts.officialSplits

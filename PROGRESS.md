@@ -725,3 +725,16 @@ Follow-up to the Adjuster prefill fix. Owner asked why the fitted CdA and a time
 **Measured on his ride:** at his own values Δ (model) is **−0.04 s** where the old Δ said +0.83 s; +1 W reads −0.20 s vs that −0.04 s baseline, i.e. **+1 W = −0.16 s** — visible now, where the old column showed +0.67 s and buried it. (The residual −0.04 s is honest: the baseline run uses his real recorded pacing while the scenario uses flat settle power.)
 
 **Test status:** `npm test` **268/268**; `tsc -b`, `npm run lint`, `npm run build` clean. Zero console errors. Backup copy removed from `public/`.
+
+## 2026-08-17 — Owner report: gap chart dips at ~3980 m then spikes
+
+Owner spotted a dip then a spike in the last ~40 m of the Adjuster's gap-vs-baseline chart. Real bug in `buildDistanceTimeSeries` (`pages/Compare/compare.ts`), affecting **every split-anchored gap chart**, on Compare as well as the Adjuster.
+
+- **Cause:** the reference series is built by stepping WHOLE SECONDS from `t0` to the final lap-line time `b`, and `b` almost never lands on an integer second — so the series stopped at the last whole second *before* the finish. On his 2024 Pan Am quali the final point was **3985.20 m**, 14.8 m short of the line.
+- **Two failures followed.** The gap grid runs to 4000 m and `timeAtDistance` clamps past the last point, so the reference's clock froze over the final 15 m and the last grid point jumped **+0.95 s** (−0.117 → +0.833) — the spike. And the split-anchoring calls `timeAtDistance(series, 4000)`, which hit the same clamp, so it mapped that short last sample onto the official finish time instead of the finish itself — compressing lap 16's time axis and pulling the whole last lap down, which is the dip.
+- **Fix:** close the series on the finish line — append `(c·(d(b) − d0), b − t0)` when the loop ends short. The distance is taken from the same expression the loop uses, evaluated at `b`, so it's the series' own datum distance at the final lap line rather than an assumed lap-count × lap-length (which would have been wrong for non-250 m venues and for the synthetic test fixtures).
+- **Result on his ride:** tail goes 0.79 → 0.73 → 0.66 → 0.68 → 0.72 → 0.69 → 0.76 → 0.83 (small reconstruction jitter, no dip, no spike) where it previously ran 0.37 → 0.09 → −0.12 → +0.83. The whole final lap moved, since the anchoring had been wrong for every ride carrying official splits.
+
+**Regression test** added — and verified to actually fail without the fix (990.26 m vs the expected 1000 m). The first attempt did *not*: it used 4 × 15.5 s = 62.0 s, a whole number, so the finish never fell between samples and the bug was never exercised. Changed to 15.4 s (61.6 s total).
+
+**Test status:** `npm test` **269/269**; `tsc -b`, `npm run lint`, `npm run build` clean. Verified live: the plotted trace now ends at x=4000 with a smooth tail, zero console errors. Backup copy removed from `public/`.
