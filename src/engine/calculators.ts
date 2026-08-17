@@ -116,11 +116,33 @@ export function speedAtPowerFlat(
 }
 
 /**
+ * Track-model inverse of powerForSpeedTrack. kCrrLap depends on v (through the lean angle),
+ * so this is solved numerically like the flat case rather than in closed form.
+ */
+export function speedAtPowerTrack(
+  powerW: number,
+  cdaM2: number,
+  rho: number,
+  massKg: number,
+  crrEff: number,
+  eta: number,
+  track: TrackModel,
+): number {
+  return bisect((v) => powerForSpeedTrack(v, cdaM2, rho, massKg, crrEff, eta, track), powerW, 2, 35)
+}
+
+/**
  * Seconds saved over a distance by a CdA reduction at CONSTANT power (owner request
  * 2026-07 item 6: "what would this save in a 40 km TT / the hour"). At baseline CdA the
  * rider holds `vMs`; the implied power is held fixed and the speed the reduced CdA buys
- * is solved from the same flat equation. The start lap (if any) is assumed unchanged, so
+ * is solved from the same equation. The start lap (if any) is assumed unchanged, so
  * the saving applies to the remaining `distanceM − startLapDistanceM`.
+ *
+ * Pass `track` to price the ride on a velodrome (owner request 2026-08-16): rolling
+ * resistance is lifted by the lap-averaged cornering normal load kCrrLap (§4.3), which at
+ * VELO is ~34 % above flat. Both the implied power and the solved-back speed then use the
+ * track model, so the effect largely — but not exactly — cancels in the difference. Omit
+ * `track` for the flat equation, which is what this did unconditionally before.
  */
 export function timeSavedForCdaReduction(
   vMs: number,
@@ -132,11 +154,17 @@ export function timeSavedForCdaReduction(
   baselineCdaM2: number,
   distanceM: number,
   startLapDistanceM = 0,
+  track?: TrackModel,
 ): number {
   const remainingM = Math.max(0, distanceM - startLapDistanceM)
   if (remainingM === 0 || counts <= 0 || baselineCdaM2 - counts / 1000 <= 0) return 0
-  const powerW = powerForSpeedFlat(vMs, baselineCdaM2, rho, massKg, crr, eta)
-  const vNew = speedAtPowerFlat(powerW, baselineCdaM2 - counts / 1000, rho, massKg, crr, eta)
+  const reducedCda = baselineCdaM2 - counts / 1000
+  const powerW = track
+    ? powerForSpeedTrack(vMs, baselineCdaM2, rho, massKg, crr, eta, track)
+    : powerForSpeedFlat(vMs, baselineCdaM2, rho, massKg, crr, eta)
+  const vNew = track
+    ? speedAtPowerTrack(powerW, reducedCda, rho, massKg, crr, eta, track)
+    : speedAtPowerFlat(powerW, reducedCda, rho, massKg, crr, eta)
   return remainingM / vMs - remainingM / vNew
 }
 

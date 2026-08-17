@@ -37,6 +37,8 @@ interface PfsState {
   showWPerCda: boolean
   wPerCdaRef: string
   gradientCenter: string
+  /** Set once the stored `mode` has been promoted to the track-model default. */
+  modeDefaultMigrated?: boolean
 }
 
 function defaults(settings: Settings): PfsState {
@@ -49,7 +51,7 @@ function defaults(settings: Settings): PfsState {
     speedMin: '53',
     speedMax: '70',
     speedStep: '0.5',
-    mode: 'flat',
+    mode: 'track',
     venueId: '',
     showLapTime: false,
     show4kTime: false,
@@ -58,13 +60,26 @@ function defaults(settings: Settings): PfsState {
     showWPerCda: false,
     wPerCdaRef: '0.190',
     gradientCenter: '',
+    modeDefaultMigrated: true,
   }
 }
 
 function loadState(settings: Settings): PfsState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) return { ...defaults(settings), ...(JSON.parse(raw) as Partial<PfsState>) }
+    if (raw) {
+      const saved = JSON.parse(raw) as Partial<PfsState> & { modeDefaultMigrated?: boolean }
+      const merged = { ...defaults(settings), ...saved }
+      // One-time migration (owner request 2026-08-16): the track model is now the default,
+      // because the flat equation ignores the cornering normal load and under-reads rolling
+      // resistance by ~34 % lap-averaged at VELO (~8 W at 60 km/h). Anyone who used this
+      // calculator before has 'flat' persisted and would never see the new default, so
+      // promote it once. A later deliberate switch back to flat sticks, since the flag is
+      // saved with it.
+      if (!saved.modeDefaultMigrated) merged.mode = 'track'
+      merged.modeDefaultMigrated = true
+      return merged
+    }
   } catch {
     // corrupted storage → fall through to defaults
   }

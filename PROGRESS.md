@@ -680,3 +680,21 @@ Added a sortable **Start lap** column to the rides list (`RidesList.tsx`), betwe
 **Verified** against the owner's real backup (7 rides with splits + 4 without): values match his official lap-1 splits (20.766–23.387 s), blanks render "—", and sorting is correct in both directions.
 
 **Test status:** `npm test` **265/265**; `tsc -b`, `npm run lint`, `npm run build` clean. Backup copy removed from `public/`.
+
+## 2026-08-16 — Owner question: do the calculators account for cornering rolling resistance?
+
+Owner asked whether the calculators model the extra rolling resistance from the cornering normal load. Audited, answered, then fixed the two places that didn't.
+
+**The model was already there** — `track.ts` computes θ = atan(v²/(gR)) and kN = √(1+(v²/(gR))²) = 1/cos θ, and rolling is `Crr·m·g·kN·v`. Applied per sample (position- and speed-aware) in `cda.ts` and `simulate.ts`, so the CdA solve, Adjuster, solve, and start-split were all correct. Lap-averaged via `kCrrLap = (1−fBend)+fBend·kN` in `powerForSpeedTrack`.
+
+**Magnitude** (100 kg, Crr 0.0014, CdA 0.185, ρ 1.15): at VELO (250 m, R 23 m) lean hits 50.9° at 60 km/h, kN 1.586, fBend 0.578 → kCrrLap **1.339**, i.e. rolling resistance 34 % above flat, worth **+7.9 W**. At COS (333.33 m, R 33.5 m) lean 40.2°, kN 1.309 → kCrrLap 1.195, **+4.6 W**. For scale, 5 CdA counts ≈ 13 W.
+
+**Two gaps found and fixed (owner approved both):**
+- **Power-for-speed defaulted to the flat equation.** `mode` now defaults to `'track'`. Because the state is persisted in localStorage, a stale saved `'flat'` would have hidden the new default forever — added a one-time `modeDefaultMigrated` promotion. A *deliberate* later switch back to flat sticks, since the flag persists alongside it.
+- **`timeSavedForCdaReduction` used `powerForSpeedFlat` unconditionally.** Now takes an optional `track` and uses the new `speedAtPowerTrack` (numeric inverse — kCrrLap depends on v through the lean angle). Omitting `track` reproduces the old result exactly, so nothing else moved. `WattsSavedCalculator` gained a venue picker (time-saved mode only; watts saved is aero-only and venue-independent), now uses `effectiveCrr` with the venue surface factor, and its hardcoded `LAP_M = 250` start lap follows the venue.
+
+Track mode makes the CdA saving slightly *smaller* (VELO 1.916 s vs flat 1.958 s for 5 counts over 4 km): both the implied power and the solved-back speed use the same model, so the effect is second-order, and at fixed power more of the budget goes to rolling. The tighter 250 m track departs from flat more than the 333 m one, as expected from its higher lean.
+
+**Verified live:** a seeded stale `mode:'flat'` state promoted to "Full track model" on load; a deliberate switch back to flat survived a reload; the venue picker and note appear only in time mode and update lap length (250 → 333 m); switching venue changes the numbers (65.4 s at VELO vs 65.8 s at COS over 40 km). Zero console errors.
+
+**Test status:** `npm test` **268/268** (3 new: speedAtPowerTrack round-trip, flat-path byte-identical when `track` omitted, track shifts the saving with VELO departing more than COS); `tsc -b`, `npm run lint`, `npm run build` clean.

@@ -135,4 +135,41 @@ describe('timeSavedForCdaReduction (owner item 6, 2026-07 — configurable-dista
     expect(t4k5).toBeGreaterThan(1.5)
     expect(t4k5).toBeLessThan(3)
   })
+
+  // Owner request 2026-08-16: this used the flat equation unconditionally, ignoring the
+  // cornering normal load that lifts rolling resistance ~34 % lap-averaged at VELO.
+  it('speedAtPowerTrack inverts powerForSpeedTrack', async () => {
+    const { powerForSpeedTrack, speedAtPowerTrack } = await import('../calculators')
+    const { makeTrack } = await import('../index')
+    const trk = makeTrack(250, 23)
+    const p = powerForSpeedTrack(16.7, 0.19, 1.15, 100, 0.0014, 0.98, trk)
+    expect(speedAtPowerTrack(p, 0.19, 1.15, 100, 0.0014, 0.98, trk)).toBeCloseTo(16.7, 4)
+  })
+
+  it('omitting the track reproduces the old flat result exactly', async () => {
+    const { timeSavedForCdaReduction } = await import('../calculators')
+    const args = [1.15, 100, 0.0014, 0.98, 0.19] as const
+    expect(timeSavedForCdaReduction(16.7, 5, ...args, 4000, 250, undefined)).toBe(
+      timeSavedForCdaReduction(16.7, 5, ...args, 4000, 250),
+    )
+  })
+
+  it('track mode shifts the saving and the tighter track shifts it more', async () => {
+    const { timeSavedForCdaReduction } = await import('../calculators')
+    const { makeTrack } = await import('../index')
+    const args = [1.15, 100, 0.0014, 0.98, 0.19] as const
+    const flat = timeSavedForCdaReduction(16.7, 5, ...args, 4000, 250)
+    const velo = timeSavedForCdaReduction(16.7, 5, ...args, 4000, 250, makeTrack(250, 23))
+    // Same remaining distance for all three — only the track model differs.
+    const cos = timeSavedForCdaReduction(16.7, 5, ...args, 4000, 250, makeTrack(333.33, 33.5))
+    for (const v of [velo, cos]) {
+      expect(v).toBeGreaterThan(0)
+      // Both powers use the same model, so the difference is a second-order effect: the
+      // saving moves, but only slightly.
+      expect(Math.abs(v - flat) / flat).toBeLessThan(0.15)
+    }
+    // The 250 m track leans harder (kN 1.59 vs 1.31 at 60 km/h), so it departs from flat
+    // more than the 333 m one does.
+    expect(Math.abs(velo - flat)).toBeGreaterThan(Math.abs(cos - flat))
+  })
 })

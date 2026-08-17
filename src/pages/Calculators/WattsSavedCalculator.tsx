@@ -6,15 +6,24 @@
 
 import { useState } from 'react'
 import { KPH_TO_MS, timeSavedForCdaReduction, wattsSavedAero } from '../../engine/calculators'
-import type { Settings } from '../../store/types'
+import { effectiveCrr, makeTrack } from '../../engine/index'
+import type { Settings, Venue } from '../../store/types'
 import { T } from '../../components/EditableText'
 import { heatColor, heatT } from './heat'
 import { formatMinSec } from './schedule'
 
 const inputClass = 'mt-1 block w-full rounded-md border border-slate-300 px-2 py-1 text-sm'
-const LAP_M = 250
+/** Fallback lap length when no venue exists to read one from. */
+const DEFAULT_LAP_M = 250
 
-export default function WattsSavedCalculator({ settings }: { settings: Settings }) {
+export default function WattsSavedCalculator({
+  settings,
+  venues,
+}: {
+  settings: Settings
+  venues: Venue[]
+}) {
+  const [venueId, setVenueId] = useState('')
   const [rhoInput, setRhoInput] = useState(String(settings.referenceAirDensity))
   const [speedMinInput, setSpeedMinInput] = useState('57')
   const [speedMaxInput, setSpeedMaxInput] = useState('68')
@@ -24,6 +33,14 @@ export default function WattsSavedCalculator({ settings }: { settings: Settings 
   const [distanceInput, setDistanceInput] = useState('4000')
   const [mode, setMode] = useState<'watts' | 'time'>('watts')
   const [baselineCdaInput, setBaselineCdaInput] = useState('0.190')
+
+  // Time saved is priced on the velodrome (owner request 2026-08-16): rolling resistance
+  // carries the lap-averaged cornering normal load, and the start lap is one lap of THIS
+  // track, not a hardcoded 250 m. Watts saved is aero-only, so cornering never touches it.
+  const venue = venues.find((v) => v.id === venueId) ?? venues[0]
+  const track = venue ? makeTrack(venue.lapLengthM, venue.bendRadiusM) : null
+  const LAP_M = venue?.lapLengthM ?? DEFAULT_LAP_M
+  const crrEff = effectiveCrr(settings.tyreCrr, venue?.surfaceFactor ?? 1)
 
   const rho = Number(rhoInput)
   const speedMin = Number(speedMinInput)
@@ -52,11 +69,12 @@ export default function WattsSavedCalculator({ settings }: { settings: Settings 
       counts,
       rho,
       settings.systemMassKg,
-      settings.tyreCrr,
+      crrEff,
       settings.mechEfficiency,
       baselineCda,
       distanceM,
       Number.isFinite(startLapS) && startLapS > 0 ? LAP_M : 0,
+      track ?? undefined,
     )
   }
 
@@ -122,7 +140,33 @@ export default function WattsSavedCalculator({ settings }: { settings: Settings 
             <input type="number" step="0.001" value={baselineCdaInput} onChange={(e) => setBaselineCdaInput(e.target.value)} className={inputClass} />
           </label>
         )}
+        {mode === 'time' && venues.length > 0 && (
+          <label className="block text-sm">
+            <span className="font-medium text-slate-700">Venue</span>
+            <select
+              value={venue?.id ?? ''}
+              onChange={(e) => setVenueId(e.target.value)}
+              className={inputClass}
+            >
+              {venues.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
+
+      {mode === 'time' && venue && (
+        <T
+          as="p"
+          className="text-xs text-slate-500"
+          id="calculators.wattssaved.venue-note"
+          d="Time saved is priced on {venue}: rolling resistance carries the cornering normal load through the bends, and the start lap is one {lap} m lap. Watts saved is aero-only, so the venue doesn't change it."
+          vars={{ venue: venue.name, lap: venue.lapLengthM.toFixed(0) }}
+        />
+      )}
 
       {valid && (
         <div className="max-h-[36rem] overflow-auto rounded-xl border border-slate-200">

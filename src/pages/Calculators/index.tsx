@@ -65,7 +65,7 @@ export default function Calculators() {
         {tab === 'cadence' && <CadenceCalculator settings={settings} venues={venues} />}
         {tab === 'schedule' && <ScheduleBuilderCalculator />}
         {tab === 'power-for-speed' && <PowerForSpeedCalculator settings={settings} venues={venues} />}
-        {tab === 'watts-saved' && <WattsSavedCalculator settings={settings} />}
+        {tab === 'watts-saved' && <WattsSavedCalculator settings={settings} venues={venues} />}
         {tab === 'time-adjuster' && <TimeAdjusterCalculator />}
         {tab === 'gains' && <Gains embedded />}
       </div>
